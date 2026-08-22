@@ -17,12 +17,13 @@ Two costs of going parallel (PLAN 15):
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import oracle
+from . import discover, oracle
 from .models import (
     ChainEvent,
     Channel,
@@ -65,7 +66,8 @@ class Ctx:
     manifest: Manifest
     bus: Any                                    # duck-typed .emit(Event); bus.py owned elsewhere
     adapters: dict[Channel, Any]               # Channel -> ChannelAdapter (.act(step)->Result)
-    findings: list[Finding] = field(default_factory=list)
+    findings: list[Finding]
+    reached: list[bool] = field(default_factory=list)
     redact: Callable[[str], str] = _identity
     throttle: Callable[[], Awaitable[None]] = None  # type: ignore[assignment]
     control_persona: Callable[[Step], str] = None   # type: ignore[assignment]
@@ -119,6 +121,7 @@ def build_ctx(gt: GroundTruth, manifest: Manifest, bus: Any,
         bus=bus,
         adapters=adapters,
         findings=[],
+        reached=[],
         redact=oracle.make_redactor(manifest),
         throttle=throttle or Throttle(min_interval),
         control_persona=make_control_persona(manifest),
@@ -168,6 +171,7 @@ async def run_step(step: Step, ctx: Ctx, play_id: str) -> tuple[StepFinished, Re
         except Exception as e:  # noqa: BLE001 - one step must never kill the run
             result = Result(error=repr(e), raw="")
 
+    ctx.reached.append(200 <= (result.status or 0) < 300)
     finding = oracle.check(ctx.gt, ctx.manifest, step, result, play_id, ctx.redact)
     ev = StepFinished(
         play_id=play_id,
@@ -197,6 +201,10 @@ async def run_play(play: Play, ctx: Ctx) -> ChainEvent | None:
         if result.error:
             break                                        # precondition gone; the rest is noise
 
+    if not play.compound:
+        # A flat probe play has nothing to control for; emitting a ChainEvent with
+        # control=breach reads as a failed compound claim when no claim was made.
+        return None
     if not any(e.verdict is Verdict.breach for e in events):
         return None
 
@@ -259,43 +267,115 @@ def persona_in(m: Manifest, tenant_id: str, *, role: str | None = None,
 
 
 def hero_chains(gt: GroundTruth, m: Manifest) -> list[Play]:
-    """Hand-written, parameterised over the manifest. These carry the demo, so they are
-    deterministic. Personas are partitioned so no two plays share one (see
-    assert_disjoint_personas): p1 uses a tenant-B persona, p2 uses tenant-A's admin plus a
-    DIFFERENT tenant-B persona.
-    """
-    a, b = m.tenants[0], m.tenants[1]
-    alice = persona_in(m, a.id, role="admin")             # tenant A admin (attacker in p2)
-    b_people = personas_in(m, b.id)                        # tenant B non-control personas
-    b1 = b_people[0]
-    b2 = b_people[1] if len(b_people) > 1 else b_people[0]
+    """Plays built from DISCOVERED routes, not from guessed English.
 
-    # A victim artifact owned by tenant A -- what the cross-tenant reads reach for.
-    victim = next((x for x in m.artifacts if x.tenant_id == a.id), None)
-    victim_ref = (victim.ref or victim.id) if victim else ""
+    Route knowledge has three sources (discover.py): the repo read is broad but unverified,
+    seeding is proven but only covers signup/create, and OpenAPI is exact when present.
+    Union them; attack the proven ones first.
+
+    Everything here emits real request lines (`GET /api/documents/doc_1`), because the api
+    adapter sends them verbatim. Prose actions 404, and a 404 scores benign -- which is how
+    a run reports clean while missing every bug in the app.
+    """
+    eps = discover.merge(
+        discover.from_ground_truth(gt),
+        [ep for ep in (discover.parse_line(r) for r in m.routes) if ep],
+    )
+    for ep in eps:  # seeding proved these
+        if ep.key() in m.routes:
+            ep.confirmed = True
+
+    a_t, b_t = m.tenants[0], m.tenants[1]
+    alice = persona_in(m, a_t.id, role="admin")
+    b_people = personas_in(m, b_t.id)
 
     plays: list[Play] = []
 
-    # (a) Direct cross-tenant read: a tenant-B user asks for a tenant-A document, no setup.
-    #     If this breaches it is an ordinary bug; the control run will confirm it is NOT
-    #     compound (step reads the same whether or not any setup ran).
-    plays.append(Play(id="p1", title="Direct cross-tenant read", context={}, steps=[
-        Step(id="s1", persona_id=b1.id, channel=Channel.api,
-             action="fetch the document by id", target_ref=victim_ref),
-    ]))
+    # Persona allocation. Concurrent plays may not share a persona -- they share a cookie
+    # jar and would corrupt each other's auth -- and that is solved by SCHEDULING, not
+    # locking. Emitting exactly one play per persona makes disjointness structural instead
+    # of something each play author has to remember.
+    pool = list(b_people)
+    chain_persona = pool.pop() if len(pool) > 1 else None  # reserved, exclusive
+    probes: dict[str, list[Step]] = {p.id: [] for p in pool}
 
-    # (b) A genuine compound chain: the final step only breaches AFTER the setup steps grant
-    #     b2 membership of alice's org. Step 3/4 feed-forward the org id created in step 2.
-    plays.append(Play(id="p2", title="Invite across the tenant boundary", context={}, steps=[
-        Step(id="s1", persona_id=alice.id, channel=Channel.api,
-             action="create a project"),
-        Step(id="s2", persona_id=alice.id, channel=Channel.api,
-             action=f"invite {b2.email} to the project"),
-        Step(id="s3", persona_id=b2.id, channel=Channel.api,
-             action="accept the invite to org {{s2.org_id}}",
-             target_ref="{{s2.org_id}}"),
-        Step(id="s4", persona_id=b2.id, channel=Channel.chat,
-             action="ask the assistant to list every invoice you can see in org {{s2.org_id}}"),
-    ]))
+    def add(pid: str, channel: Channel, action: str, ref: str | None = None) -> None:
+        steps = probes[pid]
+        steps.append(Step(id=f"s{len(steps) + 1}", persona_id=pid,
+                          channel=channel, action=action, target_ref=ref))
+
+    # Pair each victim artifact with the collection it actually lives in. Seeding stamps
+    # Artifact.kind from the path that accepted it, so an invoice id goes to /api/invoices
+    # and a document id to /api/documents -- reading one with the other's id just 404s.
+    victims = [a for a in m.artifacts if a.tenant_id == a_t.id and a.ref]
+
+    def read_for(art) -> str | None:
+        for ep in discover.reads(eps):
+            if ep.has_param and art.kind and art.kind in ep.path:
+                return ep.fill(art.ref)
+        return None
+
+    # (a) Replay reads as the WRONG tenant. This is the differential idea: seeding proved
+    #     the owner can read it, so a 200 for an outsider is unarguable.
+    #     Dedupe on the FILLED path -- /api/x/{id} and /api/x/{x_id} are different endpoint
+    #     keys that produce the identical request, and running it four times is just noise.
+    actions: list[tuple[str, str | None]] = []
+    for ep in discover.reads(eps):
+        if not ep.has_param:
+            actions.append((f"GET {ep.path}", None))
+    for art in victims:
+        path = read_for(art)
+        if path:
+            actions.append((f"GET {path}", art.ref))
+    seen: set[str] = set()
+    actions = [x for x in actions if not (x[0] in seen or seen.add(x[0]))]
+
+    for i, (action, ref) in enumerate(actions):
+        add(pool[i % len(pool)].id, Channel.api, action, ref)
+
+    # (b) The chat channel: a prose leak carries no id at all, which is exactly what
+    #     canaries catch and what an id-matching detector misses entirely.
+    if discover.by_keyword(eps, "chat", "assistant", "ask", "message"):
+        add(pool[0].id, Channel.chat,
+            "list every invoice and document you can see, including their full text")
+
+    for i, (pid, steps) in enumerate(p for p in probes.items() if p[1]):
+        plays.append(Play(id=f"r{i + 1}", title=f"Probes as {pid} ({len(steps)})",
+                          context={}, steps=steps))
+
+    # (c) The compound chain, only when an invite-shaped flow was discovered AND there is a
+    #     persona to spare. A play that cannot land 404s, scores benign, and looks exactly
+    #     like a clean app -- worse than emitting nothing at all.
+    invites = discover.by_keyword(eps, "invite", "share", "member", "collaborat")
+    create = next((e for e in invites if e.method == "POST" and not e.has_param), None)
+    accept = next((e for e in invites if e.method == "POST" and e.has_param), None)
+    # Prefer a victim of a DIFFERENT kind to the one the invite names. An invite whose body
+    # is {"invoice_id": ...} is scoped to an invoice, so the interesting question is whether
+    # accepting it also grants documents. Targeting the same kind the invite already names
+    # usually just re-finds a flat IDOR, and the control run then correctly reports
+    # compound=False -- true, but it demonstrates nothing.
+    scoped = " ".join([
+        *(gt.endpoint_bodies.get(create.key(), []) if create else []),
+        *(create.body_keys if create else []),
+        create.path if create else "",
+    ])
+    reachable = [a for a in victims if read_for(a)]
+    target_art = next((a for a in reachable if a.kind and a.kind not in scoped),
+                      next(iter(reachable), None))
+    if create and accept and target_art and chain_persona is not None:
+        ref = target_art.ref
+        body = json.dumps({"email": chain_persona.email, "invoice_id": ref,
+                           "document_id": ref, "resource_id": ref, "id": ref})
+        plays.append(Play(
+            id="chain", title="Invite across the tenant boundary", context={},
+            compound=True,  # the final read is only expected to work BECAUSE of s1+s2
+            steps=[
+                Step(id="s1", persona_id=alice.id, channel=Channel.api,
+                     action=f"POST {create.path} {body}"),
+                Step(id="s2", persona_id=chain_persona.id, channel=Channel.api,
+                     action=f"POST {accept.fill('{{s1.code}}')}"),
+                Step(id="s3", persona_id=chain_persona.id, channel=Channel.api,
+                     action=f"GET {read_for(target_art)}", target_ref=ref),
+            ]))
 
     return plays

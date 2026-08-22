@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
@@ -97,6 +99,12 @@ def create_app(state: EngineState) -> FastAPI:
         allow_headers=["*"],
         expose_headers=["*"],
     )
+
+    @app.get("/", response_class=HTMLResponse)
+    def dashboard() -> str:
+        """The dev dashboard: one self-contained file, no build step, served same-origin
+        so fetch("state") and new EventSource("stream") need no configuration."""
+        return (Path(__file__).parent / "static" / "dashboard.html").read_text()
 
     @app.get("/state")
     def get_state() -> dict:

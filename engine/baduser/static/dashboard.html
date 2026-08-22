@@ -1,0 +1,249 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Bad User</title>
+<style>
+:root{
+  --bg:#0b0d10; --panel:#12161b; --line:#1e252e; --dim:#7c8896; --fg:#e6ebf1;
+  --benign:#2f9e6b; --breach:#e5484d; --error:#e0a020; --accent:#7aa2f7;
+  --mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 var(--mono)}
+header{display:flex;align-items:center;gap:16px;padding:10px 16px;border-bottom:1px solid var(--line)}
+h1{font-size:13px;margin:0;letter-spacing:.14em;text-transform:uppercase}
+.phase{color:var(--dim)}
+.phase b{color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
+.spacer{flex:1}
+.counts span{margin-left:14px}
+.n{font-size:19px;font-weight:600;vertical-align:-2px}
+.n.b{color:var(--breach)} .n.g{color:var(--benign)} .n.e{color:var(--error)}
+#conn{width:8px;height:8px;border-radius:50%;background:var(--error);display:inline-block}
+#conn.on{background:var(--benign)}
+main{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:1px;
+     background:var(--line);height:calc(100vh - 43px)}
+section{background:var(--panel);padding:12px 14px;overflow:auto;min-height:0}
+h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+.world{grid-column:1;grid-row:1}
+.lanes{grid-column:2;grid-row:1/3}
+.evidence{grid-column:1;grid-row:2}
+.tenant{margin-bottom:10px}
+.tname{color:var(--accent)}
+.canary{color:var(--dim);font-size:11px}
+.person{padding-left:14px;color:var(--dim);font-size:12px}
+.person.leaked{color:var(--breach)}
+.lane{border:1px solid var(--line);border-radius:4px;margin-bottom:8px;overflow:hidden}
+.lane>.lt{padding:5px 9px;background:#161b22;color:var(--dim);font-size:11px;
+          display:flex;justify-content:space-between}
+.step{display:flex;gap:8px;padding:5px 9px;border-top:1px solid var(--line);align-items:baseline}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;margin-top:5px}
+.pending .dot{background:var(--dim);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.benign .dot{background:var(--benign)} .breach .dot{background:var(--breach)}
+.error .dot{background:var(--error)}
+.breach{background:rgba(229,72,77,.09)}
+.who{color:var(--dim);font-size:11px;flex:none;width:74px;overflow:hidden;text-overflow:ellipsis}
+.ch{color:var(--dim);font-size:10px;flex:none;width:34px;text-transform:uppercase}
+.act{flex:1;min-width:0;overflow-wrap:anywhere}
+.detail{color:var(--dim);font-size:11px;padding:0 9px 6px 62px;overflow-wrap:anywhere}
+.chain{border:1px solid var(--breach);border-radius:4px;padding:8px 10px;margin-bottom:8px;
+       background:rgba(229,72,77,.07)}
+.chain .verdict{color:var(--benign)}
+.sd{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sd .col{border:1px solid var(--line);border-radius:4px;padding:9px 11px;min-width:0}
+.sd .lab{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+         margin-bottom:6px}
+.sd .should{border-color:rgba(47,158,107,.4)} .sd .did{border-color:rgba(229,72,77,.45)}
+.cite{color:var(--accent);font-size:11px;margin-bottom:4px}
+pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11.5px;color:#c8d3e0}
+mark{background:rgba(229,72,77,.32);color:#ffd9da;padding:0 1px;border-radius:2px}
+.empty{color:var(--dim)}
+.q{border:1px solid var(--accent);border-radius:4px;padding:9px 11px;margin-bottom:8px}
+.q button{font:inherit;background:#1b2430;color:var(--fg);border:1px solid var(--line);
+          border-radius:3px;padding:2px 12px;margin-right:6px;cursor:pointer}
+.q button:hover{border-color:var(--accent)}
+</style>
+
+<header>
+  <h1>Bad&nbsp;User</h1>
+  <span id="conn"></span>
+  <span class="phase">phase <b id="phase">idle</b></span>
+  <span class="spacer"></span>
+  <span class="counts">
+    <span><span class="n b" id="cB">0</span> breach</span>
+    <span><span class="n g" id="cG">0</span> benign</span>
+    <span><span class="n e" id="cE">0</span> error</span>
+  </span>
+</header>
+
+<main>
+  <section class="world"><h2>World</h2><div id="world" class="empty">waiting…</div></section>
+  <section class="lanes"><h2>Attack lanes</h2><div id="qs"></div><div id="lanes" class="empty">waiting…</div></section>
+  <section class="evidence"><h2>Should vs did</h2><div id="ev" class="empty">no findings yet</div></section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c;
+                          if (x !== undefined) n.textContent = x; return n; };
+const S = { tenants:new Map(), canaries:new Map(), leaked:new Set(),
+            lanes:new Map(), counts:{breach:0,benign:0,error:0} };
+
+// ---- world -----------------------------------------------------------------
+function drawWorld(){
+  const box = $("#world"); box.className = ""; box.replaceChildren();
+  for (const [tid, t] of S.tenants){
+    const d = el("div","tenant");
+    d.append(el("div","tname", t.name));
+    const meta = "canary " + (t.canary || "?") +
+                 (t.log ? "   \u00b7 " + t.log + " seeded" : "") +
+                 (t.failed ? "   \u00b7 " + t.failed + " FAILED" : "");
+    d.append(el("div","canary", meta));
+    for (const p of t.people)
+      d.append(el("div","person" + (S.leaked.has(tid) ? " leaked" : ""),
+                  "· " + p.name + "  " + p.role));
+    box.append(d);
+  }
+}
+function tenant(tid, name, canary){
+  if (!S.tenants.has(tid)) S.tenants.set(tid, {name:name||tid, canary, people:[]});
+  const t = S.tenants.get(tid);
+  if (name) t.name = name;
+  if (canary){ t.canary = canary; S.canaries.set(canary, tid); }
+  return t;
+}
+
+// ---- lanes -----------------------------------------------------------------
+function lane(id){
+  if (S.lanes.has(id)) return S.lanes.get(id);
+  const box = $("#lanes");
+  if (!S.lanes.size){ box.replaceChildren(); box.className = ""; }  // drop "waiting..."
+  const wrap = el("div","lane"), head = el("div","lt");
+  head.append(el("span",null,"play " + id), el("span","lstat",""));
+  const body = el("div");
+  wrap.append(head, body); box.append(wrap);
+  const o = {wrap, body, head, steps:new Map()};
+  S.lanes.set(id, o); return o;
+}
+function stepKey(e){ return e.play_id + "|" + e.persona_id + "|" + e.action; }
+function bump(v){ if (v in S.counts){ S.counts[v]++;
+  $("#cB").textContent=S.counts.breach; $("#cG").textContent=S.counts.benign;
+  $("#cE").textContent=S.counts.error; } }
+
+function onStart(e){
+  const L = lane(e.play_id);
+  const row = el("div","step pending");
+  row.append(el("span","dot"), el("span","who", e.persona_id),
+             el("span","ch", e.channel), el("span","act", e.action));
+  L.body.append(row);
+  L.steps.set(stepKey(e), row);
+  row.scrollIntoView({block:"nearest"});
+}
+function onFinish(e){
+  const L = lane(e.play_id);
+  let row = L.steps.get(stepKey(e));
+  if (!row){ onStart(e); row = L.steps.get(stepKey(e)); }
+  row.className = "step " + e.verdict;
+  if (e.detail){
+    const d = el("div","detail", e.detail);
+    row.after(d);
+  }
+  bump(e.verdict);
+}
+
+// ---- evidence: should vs did ----------------------------------------------
+function highlight(text){
+  const frag = document.createDocumentFragment();
+  const cans = [...S.canaries.keys()].filter(c => text.includes(c));
+  if (!cans.length){ frag.append(text); return frag; }
+  const re = new RegExp("(" + cans.map(c=>c.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|") + ")","g");
+  let last = 0, m;
+  while ((m = re.exec(text))){
+    if (m.index > last) frag.append(text.slice(last, m.index));
+    frag.append(el("mark",null,m[0]));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) frag.append(text.slice(last));
+  return frag;
+}
+function onFinding(f){
+  const box = $("#ev"); box.className = ""; if (box.dataset.first !== "1"){
+    box.replaceChildren(); box.dataset.first = "1"; }
+  // mark the victim tenant in the world panel
+  for (const [can, tid] of S.canaries)
+    if (f.evidence && f.evidence.includes(can)) { S.leaked.add(tid); }
+  drawWorld();
+
+  const wrap = el("div","sd");
+  const should = el("div","col should");
+  should.append(el("div","lab","should"));
+  if (f.cite) should.append(el("div","cite", f.cite));
+  should.append(el("pre",null, S.rules.get(f.invariant_id) || f.invariant_id || "—"));
+  const did = el("div","col did");
+  did.append(el("div","lab","did — " + f.channel + " as " + f.persona_id));
+  const pre = el("pre"); pre.append(highlight(f.evidence || "")); did.append(pre);
+  wrap.append(should, did);
+  box.prepend(wrap);
+}
+S.rules = new Map();
+
+function onChain(c){
+  const box = $("#ev"); box.className = ""; if (box.dataset.first !== "1"){
+    box.replaceChildren(); box.dataset.first = "1"; }
+  const d = el("div","chain");
+  d.append(el("div",null, (c.compound ? "COMPOUND CHAIN — " : "CHAIN — ") + c.title));
+  for (const s of c.steps)
+    d.append(el("div","person", (s.verdict === "breach" ? "✗ " : "· ") + s.action));
+  if (c.control_verdict)
+    d.append(el("div","verdict",
+      "control: the final step alone → " + c.control_verdict +
+      (c.compound ? ".  It only breaches after the setup." : ".")));
+  box.prepend(d);
+}
+
+// ---- questions -------------------------------------------------------------
+function onQuestion(q){
+  const d = el("div","q"); d.append(el("div",null,q.text));
+  const row = el("div");
+  for (const opt of (q.options || ["y","n"])){
+    const b = el("button",null,opt);
+    b.onclick = () => { fetch("answer",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({question_id:q.id, answer:opt})}); d.remove(); };
+    row.append(b);
+  }
+  d.append(row); $("#qs").append(d);
+}
+
+// ---- dispatch --------------------------------------------------------------
+const H = {
+  phase:  e => $("#phase").textContent = e.phase,
+  seed:   e => { const t = tenant(e.tenant_id);
+                 // /state already carries every persona; seed events only report
+                 // progress. Appending them here duplicated the whole org chart.
+                 t.log = (t.log || 0) + 1;
+                 t.failed = (t.failed || 0) + (e.ok === false ? 1 : 0);
+                 drawWorld(); },
+  truth_updated: e => S.rules.set(e.invariant.id, e.invariant.rule),
+  question: onQuestion,
+  step_started: onStart,
+  step_finished: onFinish,
+  finding: e => onFinding(e.finding),
+  chain: onChain,
+};
+
+fetch("state").then(r=>r.json()).then(s=>{
+  const m = s.manifest || {};
+  for (const t of (m.tenants||[])) tenant(t.id, t.name, t.canary);
+  for (const p of (m.personas||[])){
+    tenant(p.tenant_id); S.tenants.get(p.tenant_id).people.push({name:p.name, role:p.role});
+  }
+  for (const i of ((s.ground_truth||{}).invariants||[])) S.rules.set(i.id, i.rule);
+  if (S.tenants.size) drawWorld();
+  if (s.phase) $("#phase").textContent = s.phase;
+  (s.findings||[]).forEach(onFinding);
+}).catch(()=>{});
+
+const es = new EventSource("stream");
+es.onopen  = () => $("#conn").classList.add("on");
+es.onerror = () => $("#conn").classList.remove("on");
+es.onmessage = m => { const e = JSON.parse(m.data); (H[e.type] || (()=>{}))(e); };
+</script>

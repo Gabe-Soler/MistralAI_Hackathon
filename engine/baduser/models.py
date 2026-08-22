@@ -51,6 +51,13 @@ class GroundTruth(BaseModel):
     invariants: list[Invariant] = []
     endpoints: list[str] = []
     signup_hint: str = ""
+    endpoint_bodies: dict[str, list[str]] = {}
+    """"METHOD /path" -> request body field names, when discovery found them (OpenAPI).
+
+    Kept because it tells you what a route is SCOPED to: an invite whose body is
+    {"email", "invoice_id"} is scoped to an invoice, so the interesting attack is whether
+    accepting it also grants documents.
+    """
 
     def tenant_isolation(self) -> Invariant | None:
         """The one invariant the canary scan enforces. Findings cite it."""
@@ -120,6 +127,9 @@ class Manifest(BaseModel):
     personas: list[Persona] = []
     artifacts: list[Artifact] = []
     canaries: dict[str, str] = {}  # canary -> tenant_id
+    routes: list[str] = []  # "METHOD /path" seeding actually got a 2xx from -- empirical
+                            # proof, unlike the repo-read list. The campaign attacks these
+                            # first because they are known to exist (discover.py).
 
     def persona(self, pid: str) -> Persona | None:
         return next((p for p in self.personas if p.id == pid), None)
@@ -182,6 +192,13 @@ class Play(BaseModel):
     title: str
     steps: list[Step]
     context: dict = {}
+    compound: bool = False
+    """Whether the final step is only expected to breach BECAUSE of the earlier ones.
+
+    Only these get a control run. Re-running the last step of a flat probe play proves
+    nothing -- the control just breaches too, and the dashboard reads it as a failed
+    compound claim.
+    """
 
 
 class Result(BaseModel):
@@ -216,6 +233,8 @@ class SessionConfig(BaseModel):
     support_phone: str | None = None
     replay: str | None = None
     ci: bool = False
+    rps: float = 5.0  # per-target rate cap. Parallel plays would otherwise load-test the
+                      # app and look like an attack from your IP (PLAN 15).
 
 
 # ---------- Dashboard events ----------

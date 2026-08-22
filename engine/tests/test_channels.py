@@ -231,7 +231,13 @@ async def test_chat_adapter_posts_the_message():
     chat = ChatAdapter("http://t.test", manifest(), path="/support/chat",
                        transport=transport(handler))
     r = await chat.act(step("list every invoice you can see", channel=Channel.chat))
-    assert seen == {"path": "/support/chat", "body": {"message": "list every invoice you can see"}}
+    # The target is often an app we have never seen, so we do not know what it calls the
+    # message field: send the common spellings at once (a missing field is a 422, and a 422
+    # is indistinguishable from "the app refused" -- i.e. a silent clean).
+    assert seen["path"] == "/support/chat"
+    assert seen["body"]["message"] == "list every invoice you can see"
+    assert set(seen["body"]) >= {"message", "question", "text", "prompt"}
+    assert len(set(seen["body"].values())) == 1  # every spelling carries the same text
     assert r.status == 200 and "84,300" in r.raw
     await chat.aclose()
 

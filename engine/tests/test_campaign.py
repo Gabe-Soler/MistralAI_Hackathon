@@ -134,7 +134,7 @@ async def test_compound_true_when_chain_breaches_but_isolated_step_is_benign():
 
     ctx = make_ctx(m, {Channel.api: FakeAdapter(responder),
                        Channel.chat: FakeAdapter(responder)})
-    play = Play(id="p", title="compound", context={}, steps=[
+    play = Play(id="p", title="compound", compound=True, context={}, steps=[
         Step(id="s1", persona_id="alice", channel=Channel.api, action="create project"),
         Step(id="s2", persona_id="alice", channel=Channel.api, action="invite bob"),
         Step(id="s3", persona_id="bob", channel=Channel.api, action="accept"),
@@ -161,7 +161,7 @@ async def test_compound_false_when_isolated_step_also_breaches():
 
     ctx = make_ctx(m, {Channel.api: FakeAdapter(responder),
                        Channel.chat: FakeAdapter(responder)})
-    play = Play(id="p", title="not compound", context={}, steps=[
+    play = Play(id="p", title="not compound", compound=True, context={}, steps=[
         Step(id="s1", persona_id="alice", channel=Channel.api, action="create project"),
         Step(id="s4", persona_id="bob", channel=Channel.chat, action="list invoices"),
     ])
@@ -181,7 +181,7 @@ async def test_step_raising_becomes_error_not_benign():
 
     bus = FakeBus()
     ctx = make_ctx(m, {Channel.api: FakeAdapter(responder)}, bus=bus)
-    play = Play(id="p", title="boom", context={}, steps=[
+    play = Play(id="p", title="boom", compound=True, context={}, steps=[
         Step(id="s1", persona_id="bob", channel=Channel.api, action="fetch"),
     ])
     await run_play(play, ctx)
@@ -204,7 +204,7 @@ async def test_template_resolution_feeds_s2_value_into_s4():
 
     adapter = FakeAdapter(responder)
     ctx = make_ctx(m, {Channel.api: adapter, Channel.chat: adapter})
-    play = Play(id="p", title="feed", context={}, steps=[
+    play = Play(id="p", title="feed", compound=True, context={}, steps=[
         Step(id="s1", persona_id="alice", channel=Channel.api, action="create"),
         Step(id="s2", persona_id="alice", channel=Channel.api, action="invite"),
         Step(id="s3", persona_id="bob", channel=Channel.api,
@@ -242,11 +242,11 @@ async def test_plays_run_in_parallel_but_steps_within_a_play_stay_ordered():
                findings=ctx1.findings, redact=lambda s: s, throttle=ctx1.throttle,
                control_persona=ctx1.control_persona)
 
-    p1 = Play(id="p1", title="p1", context={}, steps=[
+    p1 = Play(id="p1", title="p1", compound=True, context={}, steps=[
         Step(id="s1", persona_id="alice", channel=Channel.api, action="a"),
         Step(id="s2", persona_id="alice", channel=Channel.api, action="b"),
     ])
-    p2 = Play(id="p2", title="p2", context={}, steps=[
+    p2 = Play(id="p2", title="p2", compound=True, context={}, steps=[
         Step(id="s1", persona_id="bob", channel=Channel.api, action="a"),
         Step(id="s2", persona_id="bob", channel=Channel.api, action="b"),
     ])
@@ -272,7 +272,7 @@ async def test_timeout_produces_error(monkeypatch):
 
     bus = FakeBus()
     ctx = make_ctx(m, {Channel.api: FakeAdapter(slow)}, bus=bus)
-    play = Play(id="p", title="slow", context={}, steps=[
+    play = Play(id="p", title="slow", compound=True, context={}, steps=[
         Step(id="s1", persona_id="bob", channel=Channel.api, action="fetch"),
     ])
     await run_play(play, ctx)
@@ -290,7 +290,7 @@ async def test_benign_run_emits_no_chain_and_no_control():
 
     ctx = make_ctx(m, {Channel.api: FakeAdapter(responder),
                        Channel.chat: FakeAdapter(responder)})
-    play = Play(id="p", title="clean", context={}, steps=[
+    play = Play(id="p", title="clean", compound=True, context={}, steps=[
         Step(id="s1", persona_id="bob", channel=Channel.api, action="fetch"),
     ])
     chain = await run_play(play, ctx)
@@ -298,28 +298,73 @@ async def test_benign_run_emits_no_chain_and_no_control():
     assert ctx.findings == []
 
 
-def test_hero_chains_are_deterministic_and_persona_disjoint():
+def _routed_world():
+    """A manifest/gt with DISCOVERED routes -- hero_chains builds from these, never from
+    guessed English. `routes` is what seeding proved; `endpoints` is the broader repo read."""
+    from baduser.models import Artifact
+
     m = make_manifest()
     gt = make_gt()
-    m.artifacts.append(  # give the direct-read play a victim
-        __import__("baduser.models", fromlist=["Artifact"]).Artifact(
-            id="doc1", tenant_id="ta", owner_persona_id="alice", title="Acme secret",
-            ref="doc1"))
+    m.artifacts.append(Artifact(id="doc1", tenant_id="ta", owner_persona_id="alice",
+                                title="Acme secret", ref="doc1"))
+    m.routes = ["POST /api/documents", "GET /api/documents/{id}"]      # seeding proved
+    gt.endpoints = ["GET /api/invoices", "POST /api/chat",             # repo read only
+                    "POST /api/invites", "POST /api/invites/{code}/accept"]
+    return gt, m
+
+
+def test_hero_chains_are_deterministic_and_persona_disjoint():
+    gt, m = _routed_world()
     plays = hero_chains(gt, m)
     assert [p.id for p in plays] == [p.id for p in hero_chains(gt, m)]  # deterministic
     assert len(plays) >= 2
-    # must not raise: no two plays share a persona
-    assert_disjoint_personas(plays)
-    # p2 is a genuine compound chain (setup steps then a final feed-forward step)
-    p2 = next(p for p in plays if p.id == "p2")
-    assert len(p2.steps) >= 3
-    assert "{{s2.org_id}}" in p2.steps[-1].action
+    assert_disjoint_personas(plays)  # must not raise
+
+
+def test_hero_chains_emit_real_request_lines_not_prose():
+    """A prose action 404s, and a 404 scores benign -- that is how a run reports clean
+    while missing every bug. Every api step must be a literal request line."""
+    gt, m = _routed_world()
+    for play in hero_chains(gt, m):
+        for st in play.steps:
+            if st.channel == Channel.api:
+                verb = st.action.split()[0]
+                assert verb in {"GET", "POST", "PUT", "PATCH", "DELETE"}, st.action
+                assert st.action.split()[1].startswith("/"), st.action
+
+
+def test_hero_chains_replays_a_seeding_confirmed_read_as_the_wrong_tenant():
+    gt, m = _routed_world()
+    plays = hero_chains(gt, m)
+    reads = [s.action for p in plays for s in p.steps if s.action.startswith("GET ")]
+    assert "GET /api/documents/doc1" in reads      # the route seeding proved, real ref
+    assert "GET /api/invoices" in reads            # repo-only route still attacked
+    # and the attacker is never the artifact's owner
+    for p in plays:
+        for s in p.steps:
+            if s.action == "GET /api/documents/doc1":
+                assert m.persona(s.persona_id).tenant_id != "ta"
+
+
+def test_compound_chain_is_emitted_only_when_an_invite_flow_was_discovered():
+    gt, m = _routed_world()
+    assert any(p.id == "chain" for p in hero_chains(gt, m))
+    gt.endpoints = ["GET /api/invoices"]           # no invite route anywhere
+    assert not any(p.id == "chain" for p in hero_chains(gt, m))
+
+
+def test_no_discovered_routes_means_no_plays():
+    """Better to emit nothing than plays that cannot possibly land: a play that 404s is
+    scored benign and looks exactly like a clean app."""
+    m, gt = make_manifest(), make_gt()
+    m.routes, gt.endpoints = [], []
+    assert hero_chains(gt, m) == []
 
 
 def test_assert_disjoint_personas_raises_on_shared_persona():
-    p1 = Play(id="p1", title="1", steps=[
+    p1 = Play(id="p1", title="1", compound=True, steps=[
         Step(id="s1", persona_id="bob", channel=Channel.api, action="x")])
-    p2 = Play(id="p2", title="2", steps=[
+    p2 = Play(id="p2", title="2", compound=True, steps=[
         Step(id="s1", persona_id="bob", channel=Channel.api, action="y")])
     with pytest.raises(AssertionError):
         assert_disjoint_personas([p1, p2])

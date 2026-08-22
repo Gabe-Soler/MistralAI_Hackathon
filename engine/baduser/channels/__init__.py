@@ -62,11 +62,14 @@ def build_adapters(
     from .http import ApiAdapter, ChatAdapter  # local: keeps import order flat
 
     out: dict[Channel, ChannelAdapter] = {}
+    # api and chat hit the same host, so they share one per-persona client pool: a session
+    # established while seeding over api must also authenticate the chat channel.
+    pool: dict = {}
     if Channel.api in cfg.channels:
-        out[Channel.api] = ApiAdapter(cfg.target, manifest, transport=transport)
+        out[Channel.api] = ApiAdapter(cfg.target, manifest, transport=transport, clients=pool)
     if Channel.chat in cfg.channels:
         out[Channel.chat] = ChatAdapter(
-            cfg.target, manifest, path=chat_path, transport=transport
+            cfg.target, manifest, path=chat_path, transport=transport, clients=pool
         )
     if Channel.web in cfg.channels:
         from .web import WebAdapter  # guarded import; browser-use is optional

@@ -19,14 +19,18 @@ from collections import deque
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, runtime_checkable
 
-# mistralai is optional (pyproject `llm` extra). Guard it: absence must not break imports.
-try:  # pragma: no cover - exercised only when the extra is installed
-    from mistralai import Mistral  # type: ignore
-
-    _HAVE_MISTRAL = True
-except Exception:  # noqa: BLE001  # pragma: no cover - any import failure means "unavailable"
-    Mistral = None  # type: ignore
-    _HAVE_MISTRAL = False
+# The SDK moved `Mistral` between majors: 1.x exports it top-level, 2.9+ from
+# `mistralai.client`. Try both -- a wrong guess here reports "not installed" for a package
+# that is installed, which is exactly the kind of silent skip this project exists to avoid.
+Mistral = None  # type: ignore[assignment]
+_HAVE_MISTRAL = False
+for _path in ("mistralai.client", "mistralai"):
+    try:  # pragma: no cover - depends on which SDK major is installed
+        Mistral = __import__(_path, fromlist=["Mistral"]).Mistral  # type: ignore[attr-defined]
+        _HAVE_MISTRAL = True
+        break
+    except Exception:  # noqa: BLE001 - try the next path
+        continue
 
 
 DEFAULT_MODEL = "mistral-large-latest"

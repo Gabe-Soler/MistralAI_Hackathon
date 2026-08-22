@@ -61,15 +61,43 @@ def fill_credentials(action: str, persona: Persona | None) -> str:
     return action
 
 
+def _scalars(text: str) -> dict:
+    """Top-level scalar fields of a JSON response, for the play context.
+
+    This is what makes compound chains work: step 2 creates an invite and the app replies
+    `{"code": "d2d4..."}`, so step 3 can say `{{s2.code}}`. Without it the template stays
+    literal, the request 404s, and the chain silently fails to compound.
+    """
+    try:
+        data = json.loads(text or "")
+    except (ValueError, TypeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out = {k: v for k, v in data.items() if isinstance(v, (str, int, float, bool))}
+    # one level down, so {"invoice": {"id": ...}} is reachable as {{sN.id}} too
+    for v in data.values():
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                if isinstance(v2, (str, int, float, bool)):
+                    out.setdefault(k2, v2)
+    return out
+
+
 class _HttpBase:
     """Shared client cache + error discipline for the api and chat adapters."""
 
-    def __init__(self, target: str, manifest: Manifest, *, transport=None, timeout: float = 10.0):
+    def __init__(self, target: str, manifest: Manifest, *, transport=None, timeout: float = 10.0,
+                 clients: dict[str, httpx.AsyncClient] | None = None):
         self.target = (target or "").rstrip("/")
         self.manifest = manifest
         self._transport = transport
         self._timeout = timeout
-        self._clients: dict[str, httpx.AsyncClient] = {}
+        # Shared across the api and chat adapters when passed in: they hit the same host,
+        # so a session established by one must authenticate the other. Without this the
+        # chat channel is anonymous and every reply is "Missing credentials" -- which the
+        # oracle scores benign, i.e. the chat leak is silently never tested.
+        self._clients: dict[str, httpx.AsyncClient] = {} if clients is None else clients
 
     def client_for(self, persona_id: str | None) -> httpx.AsyncClient:
         """One persistent client per persona: its own cookie jar and auth header."""
@@ -92,7 +120,7 @@ class _HttpBase:
     async def _send(self, step: Step, method: str, path: str, body: Any) -> Result:
         client = self.client_for(step.persona_id)
         r = await client.request(method, path or "/", json=body)
-        return Result(status=r.status_code, raw=cap(r.text))
+        return Result(status=r.status_code, raw=cap(r.text), extracted=_scalars(r.text))
 
     async def aclose(self) -> None:
         for c in self._clients.values():
@@ -119,9 +147,15 @@ class ChatAdapter(_HttpBase):
         super().__init__(target, manifest, **kw)
         self.path = path
 
+    # The target is often an app we have never seen, so we do not know what it calls the
+    # message field. Send the common spellings at once: FastAPI/Express both ignore extra
+    # keys by default, and one missing field is the difference between a leak and a 422.
+    FIELDS = ("message", "question", "text", "prompt", "query", "input")
+
     async def act(self, step: Step) -> Result:
         try:
             action = fill_credentials(step.action, self.manifest.persona(step.persona_id))
-            return await self._send(step, "POST", self.path, {"message": action})
+            body = dict.fromkeys(self.FIELDS, action)
+            return await self._send(step, "POST", self.path, body)
         except Exception as e:  # noqa: BLE001 - see ApiAdapter.act
             return Result(error=repr(e))

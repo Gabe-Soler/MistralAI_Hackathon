@@ -5,12 +5,31 @@
 #
 # Everything runs offline, no API keys.
 
-.PHONY: install test lint target eval check
+.PHONY: setup install install-cli install-skill test lint target mock demo live eval check
 
 UV := cd engine && uv run --extra dev
 
+# One-command setup for a fresh clone: deps, the global `bad-user` command, and the
+# /baduser skill for Mistral Vibe.
+setup: install install-cli install-skill
+	@echo
+	@echo "  ready. try:  make target   (terminal 1)"
+	@echo "               make live     (terminal 2)"
+	@echo "  or from any directory:  vibe --trust  ->  /baduser against <url>"
+
 install:
 	cd engine && uv sync --extra dev
+
+# Puts `bad-user` on PATH so it runs from any directory, not just this repo.
+install-cli:
+	uv tool install --force ./engine
+
+# Copies the /baduser command into Vibe's global skills dir, so it is available in every
+# vibe session -- including the scratch directory where you vibe-code the target app.
+install-skill:
+	mkdir -p ~/.vibe/skills/baduser
+	cp .vibe/skills/baduser/SKILL.md ~/.vibe/skills/baduser/SKILL.md
+	@echo "  /baduser installed globally (project copy stays in .vibe/skills/)"
 
 test:
 	$(UV) pytest -q
@@ -24,6 +43,21 @@ lint:
 # The vibe-coded target app on :8000 (PLAN 22 step 0). ./target/reset.sh wipes its DB.
 target:
 	$(UV) python -m uvicorn app:app --app-dir ../target --host 127.0.0.1 --port 8000 --reload
+
+# The dashboard, driven by a scripted run: no target app, no API keys. Opens a browser.
+#   make mock            realtime pacing
+#   make mock SPEED=0.2  fast rehearsal
+SPEED ?= 1.0
+
+mock:
+	$(UV) bad-user --mock --speed $(SPEED)
+
+# A REAL run against the local target app, dashboard open. Start `make target` first.
+live:
+	$(UV) bad-user --target http://127.0.0.1:8000 --channels api,chat
+
+demo:
+	$(UV) bad-user --repo ../target --target http://127.0.0.1:8000 --channels api,chat
 
 # The validation loop: boots the target on a free port, seeds two tenants, asserts every
 # BUG-* is detected and every OK-* is not. Non-zero on any mismatch.

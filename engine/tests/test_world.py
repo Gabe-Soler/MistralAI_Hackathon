@@ -211,7 +211,10 @@ async def test_seed_prefers_the_web_channel_for_signup_and_the_api_for_artifacts
     assert len(web.calls) == len(m.personas)
     assert all(s.channel is Channel.web for s in web.calls)
     assert not [s for s in api.calls if "/api/register" in s.action]
-    assert len(api.calls) == len(m.artifacts)
+    # >= not ==: seeding EXPLORES collections (tries an untried path first) so an
+    # artifact can cost more than one call. The intent here is that artifacts go via
+    # api and not the browser, not that each costs exactly one request.
+    assert len(api.calls) >= len(m.artifacts)
 
 
 async def test_seed_falls_back_to_the_signup_hint_when_the_browser_fails_twice():

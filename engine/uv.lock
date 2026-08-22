@@ -213,6 +213,7 @@ dependencies = [
     { name = "faker" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "mistralai" },
     { name = "pydantic" },
     { name = "sse-starlette" },
     { name = "typer" },
@@ -225,9 +226,6 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "ruff" },
 ]
-llm = [
-    { name = "mistralai" },
-]
 web = [
     { name = "browser-use" },
 ]
@@ -238,7 +236,7 @@ requires-dist = [
     { name = "faker", specifier = ">=25.0" },
     { name = "fastapi", specifier = ">=0.111" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "mistralai", marker = "extra == 'llm'", specifier = ">=1.0" },
+    { name = "mistralai", specifier = ">=1.0" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
@@ -247,7 +245,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
-provides-extras = ["dev", "llm", "web"]
+provides-extras = ["dev", "web"]
 
 [[package]]
 name = "beautifulsoup4"

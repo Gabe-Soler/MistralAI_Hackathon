@@ -196,6 +196,15 @@ def _save(store: Any, manifest: Manifest) -> None:
         store.save_manifest(manifest)
 
 
+def _confirm(state: dict, method: str, path: str) -> None:
+    """Record a route we have empirically proven works. The campaign attacks these first:
+    a route seeding got a 2xx from is one worth replaying as the wrong tenant, no guessing."""
+    state.setdefault("routes", [])
+    key = f"{method.upper()} {path}"
+    if key not in state["routes"]:
+        state["routes"].append(key)
+
+
 def _ok(r: Result) -> bool:
     """A step landed. `error` set is never ok -- an adapter crash is not a seeded tenant."""
     if r.error:
@@ -303,6 +312,7 @@ async def _signup(persona, tenant, gt, adapters, state) -> bool:
                         channel=Channel.api, action=f"{method} {path} {body}")
             if _ok(await api.act(step)):
                 state["signup_path"], state["signup_method"] = path, method
+                _confirm(state, method, path)
                 return True
     return False
 
@@ -331,15 +341,41 @@ async def _create_artifact(a: Artifact, gt: GroundTruth, adapters, state) -> boo
     api = adapters.get(Channel.api)
     if api is not None:
         body = json.dumps(_artifact_payload(a))
-        paths = [state["artifact_path"]] if state.get("artifact_path") \
-            else _artifact_candidates(gt, a.kind)
+        # Spread artifacts across EVERY collection that works, rather than caching the
+        # first one. An app with /api/documents and /api/invoices must end up with data in
+        # both: seed only documents and `GET /api/invoices` returns [], which reads as a
+        # clean app when it is really an untested one.
+        working = state.setdefault("artifact_paths", [])
+        tried = state.setdefault("artifact_tried", set())
+        candidates = _artifact_candidates(gt, a.kind)
+        n = state["artifact_n"] = state.get("artifact_n", 0) + 1
+
+        # EXPLORE first, then round-robin. Rotating only among paths already known to work
+        # means the first collection that succeeds is the only one ever tried -- the app
+        # ends up with invoices and no documents, every /api/documents route returns
+        # nothing, and the routes that read documents are silently never tested.
+        untried = [c for c in candidates if c not in tried]
+        if untried:
+            paths = [untried[0], *working, *untried[1:]]
+        elif working:
+            paths = [working[n % len(working)], *working]
+        else:
+            paths = candidates
         for path in paths:
             step = Step(id=f"seed-artifact-{a.id}", persona_id=a.owner_persona_id,
                         channel=Channel.api, action=f"POST {path} {body}")
+            tried.add(path)
             r = await api.act(step)
             if _ok(r):
+                if path not in working:
+                    working.append(path)
                 state["artifact_path"] = path
                 a.ref = _ref_of(r.raw) or a.ref or path
+                a.kind = path.rstrip("/").rsplit("/", 1)[-1].rstrip("s") or a.kind
+                _confirm(state, "POST", path)
+                # The read route follows by convention from the create route, and the
+                # oracle will tell us if the guess is wrong.
+                _confirm(state, "GET", path.rstrip("/") + "/{id}")
                 return True
     web = adapters.get(Channel.web)
     if web is not None:
@@ -359,7 +395,7 @@ async def seed(manifest: Manifest, adapters, bus=None, store=None, *, gt=None) -
     Raises SeedError if fewer than two tenants come up -- CONTRACT invariant 4.
     """
     gt = gt or GroundTruth(product_name="", product_type="b2b")
-    state: dict[str, str] = {}  # routes that worked, reused for the rest of the run
+    state: dict = {}  # routes that worked, reused for the rest of the run
     seeded: list[str] = []
 
     for tenant in manifest.tenants:
@@ -398,6 +434,8 @@ async def seed(manifest: Manifest, adapters, bus=None, store=None, *, gt=None) -
             _emit(bus, SeedEvent(tenant_id=tenant.id,
                                  detail="tenant NOT seeded: missing working personas"))
         _save(store, manifest)
+
+    manifest.routes = list(state.get("routes", []))  # hand the proven routes to the campaign
 
     if len(seeded) < 2:
         raise SeedError(
