@@ -3,7 +3,7 @@ MistralAI Hackathon, San Francisco August 2026.
 
 ---
 
-# Bad User
+# BadChat
 
 **The worst customer your product will ever have — and it files the bug report.**
 
@@ -25,7 +25,7 @@ Three ordinary steps, one leak, and proof the leak *needed* those steps.
 ## The idea
 
 Testing "did the app leak something?" normally requires a human to judge every response.
-Bad User sidesteps that: **it builds the world it tests in.**
+BadChat sidesteps that: **it builds the world it tests in.**
 
 It creates two fake companies through the app's own signup flow, stamping a unique random
 tag — a *canary* — into every string each one owns: company name, people's names, emails,
@@ -78,7 +78,7 @@ command to upgrade.
 
 You still need the repo if you want `make target`, `make mock`, or the eval.
 
-Then a key — Bad User reads it from the environment, `./.env`, or `~/.vibe/.env`:
+Then a key — BadChat reads it from the environment, `./.env`, or `~/.vibe/.env`:
 
 ```bash
 echo 'MISTRAL_API_KEY=...' >> ~/.vibe/.env
@@ -121,7 +121,7 @@ mkdir demo && cd demo && vibe --trust
 > /baduser against http://127.0.0.1:3000 with --repo .
 ```
 
-Mistral writes the app; Bad User breaks it. Nothing was planted — the app is a minute old.
+Mistral writes the app; BadChat breaks it. Nothing was planted — the app is a minute old.
 
 ## Reading the output
 
@@ -238,7 +238,7 @@ creates its schema at startup.
 |---|---|
 | `/baduser` doesn't exist in Vibe | not started with `--trust` |
 | `port 8787 is already in use` | an earlier run is still up — stop it, or `--port 8788` |
-| `seeding failed: could not seed 2 tenants` | signup isn't open (email verification, OAuth, or CAPTCHA). Bad User can't test an app it can't get accounts on. |
+| `seeding failed: could not seed 2 tenants` | signup isn't open (email verification, OAuth, or CAPTCHA). BadChat can't test an app it can't get accounts on. |
 | `NO STEP REACHED THE TARGET` | the plays don't match this app's API. Check the URL, and that it serves `/openapi.json` or that `--repo` was passed. |
 | the run never exits | by design — the server stays up so the dashboard stays live. Use `--ci` to quit on completion. |
 | dashboard shows an old run | dashboards are per-run. `make status` to find the live one. |
@@ -263,7 +263,7 @@ EVAL PASSED
 
 ## Limits
 
-Bad User needs open signup, a multi-tenant model, and a JSON API. That describes almost
+BadChat needs open signup, a multi-tenant model, and a JSON API. That describes almost
 anything an AI code generator produces. It does **not** yet handle email verification,
 OAuth-only signup, CAPTCHA, GraphQL, or server-rendered apps with no API — and in each of
 those cases it fails loudly rather than reporting a clean run.
