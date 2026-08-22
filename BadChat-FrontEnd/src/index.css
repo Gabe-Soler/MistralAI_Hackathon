@@ -10,10 +10,10 @@
 
   /* BadChat hero. --hero-accent is the artwork's designed colour and the
      fallback the blocks render before useScrollPalette writes --hg-*. */
-  --hero-bg: #fffbf5;
+  --hero-bg: #fffaf5;
   --hero-ink: #54403e;
-  --hero-neutral: #eaeaea;
-  --hero-accent: #ff7900;
+  --hero-neutral: #fff5eb;
+  --hero-accent: #ff9533;
   --hero-shadow: rgb(84 64 62 / 0.3);
 
   color-scheme: light;
@@ -25,21 +25,21 @@
   /* Warmed to the hero palette so shadcn components sit in the same world as
      the artwork: cream grounds, warm brown ink, the staircase orange as
      primary and the ramp's deep red as destructive. */
-  --background: #fffbf5;
+  --background: #fffaf5;
 
   --foreground: #54403e;
 
-  --card: #fffbf5;
+  --card: #fffaf5;
 
   --card-foreground: #54403e;
 
-  --popover: #fffbf5;
+  --popover: #fffaf5;
 
   --popover-foreground: #54403e;
 
   --primary: #ff7900;
 
-  --primary-foreground: #fffbf5;
+  --primary-foreground: #fffaf5;
 
   --secondary: #f4ece2;
 
@@ -175,6 +175,14 @@ body {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* The cat is the pointer (see CatCursor); the class is only ever on the
+   document while it is mounted, so touch and reduced-motion keep the native
+   one. !important because element and utility cursors would win otherwise. */
+.cat-cursor,
+.cat-cursor * {
+  cursor: none !important;
 }
 
 @layer base {

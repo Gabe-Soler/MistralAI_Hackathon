@@ -1,15 +1,15 @@
 /**
- * Geometry for Bottom_hero_and_top_next_page.svg.
+ * Geometry for top-group.svg — of which bottom-group.svg is the top half.
  *
- * The artwork sits on a 16 × 28 grid (columns of 100 units, rows of 512/28)
+ * The artwork sits on a 16 × 28 grid (columns of 120 units, rows of 614.4/28)
  * and is mirror-symmetric both left-to-right and top-to-bottom. That vertical
  * symmetry is what lets it split at the fold into a descending staircase that
  * closes the hero and its rising reflection that opens the next section.
  */
 export const COLS = 16
 export const ROWS = 28
-export const COL = 100
-export const ROW = 512 / 28
+export const COL = 120
+export const ROW = 614.4 / 28
 export const FOLD = ROWS / 2
 
 /** Each tier doubles in size and starts further down: spans 1, 2, 4. */

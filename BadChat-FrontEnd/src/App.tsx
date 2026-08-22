@@ -1,15 +1,18 @@
-import { CatFigure } from '@/components/CatFigure'
-import { Hero } from '@/components/Hero'
-import { HeroStaircase } from '@/components/HeroStaircase'
-import { QaResults } from '@/components/QaResults'
-import { ThinkingTranscript } from '@/components/ThinkingTranscript'
-import { HERO_PIN, SCENE_SCROLL, useSceneScroll } from '@/hooks/useSceneScroll'
+import { CatCursor } from "@/components/CatCursor";
+import { CatFigure } from "@/components/CatFigure";
+import { Hero } from "@/components/Hero";
+import { HeroStaircase } from "@/components/HeroStaircase";
+import { QaResults } from "@/components/QaResults";
+import { ThinkingTranscript } from "@/components/ThinkingTranscript";
+import { HERO_PIN, SCENE_SCROLL, useSceneScroll } from "@/hooks/useSceneScroll";
 
 function App() {
-  useSceneScroll()
+  useSceneScroll();
 
   return (
     <>
+      <CatCursor />
+
       {/* Taller than the hero by exactly the cat's run, so the sticky child
           stays pinned for that long and the cat crosses a frozen screen. When
           it releases, the hero rests on this block's bottom edge — flush with
@@ -30,12 +33,11 @@ function App() {
         <HeroStaircase half="bottom" />
 
         <div className="flex-1 px-[6vw] pt-[10vh] pb-[12vh] flex items-center flex-col">
-                      <div className='border-b w-full flex items-center justify-center mb-12'>
-                        <CatFigure width="164px" className="mt-1 shrink-0 mb-0" />
-                      </div>
+          <div className="border-b w-full flex items-center justify-center mb-12">
+            <CatFigure width="164px" className="mt-1 shrink-0 mb-0" />
+          </div>
 
           <div className="flex w-full max-w-5xl items-start gap-18 relative">
-
             <div className="min-w-0 flex-1">
               <p className="m-0 mb-6 font-mono text-[0.7rem] tracking-[0.18em] text-[var(--muted-foreground)] uppercase">
                 BadChat · QA run
@@ -57,7 +59,7 @@ function App() {
         <HeroStaircase half="top" />
       </footer>
     </>
-  )
+  );
 }
 
-export default App
+export default App;

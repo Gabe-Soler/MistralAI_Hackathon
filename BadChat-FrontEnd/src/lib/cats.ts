@@ -44,3 +44,13 @@ export function fitCat({ frame, content }: CatAsset): CSSProperties {
     imageRendering: 'pixelated',
   }
 }
+
+/**
+ * The cursor. Not animated — it's a single sprite, pointed by the hand that
+ * moves it (see CatCursor).
+ */
+export const EVIL_CAT: CatAsset = {
+  src: '/evil-cat.png',
+  frame: { w: 300, h: 300 },
+  content: { x: 84, y: 75, w: 122, h: 141 },
+}

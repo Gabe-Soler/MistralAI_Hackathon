@@ -1,4 +1,5 @@
 import { HeroStaircase } from '@/components/HeroStaircase'
+import { PixelBackdrop } from '@/components/PixelBackdrop'
 import { FIRST_STEP_SURFACE } from '@/components/heroGrid'
 import { WALKING_CAT, catAspect, fitCat } from '@/lib/cats'
 
@@ -15,7 +16,11 @@ const CAT_TRAVEL = 'translateX(calc(var(--cat-run, 0) * (100cqw + 100%) - 100%))
 export function Hero() {
   return (
     <section className="relative flex min-h-svh flex-col overflow-hidden bg-[var(--hero-bg)]">
-      <div className="flex flex-1 flex-col items-center justify-end px-6 pb-[5vh] text-center">
+      {/* The sunset the rest of the hero stands in front of. It reacts to the
+          cursor, so everything above it is stacked out of the way. */}
+      <PixelBackdrop />
+
+      <div className="relative flex flex-1 flex-col items-center justify-end px-6 pb-[11vh] text-center">
         <h1
           className="m-0 font-mono font-normal leading-[0.9] tracking-[-0.02em] text-[var(--hero-ink)]"
           style={{ fontSize: 'clamp(3.25rem, 12vw, 15rem)' }}
@@ -30,7 +35,7 @@ export function Hero() {
         </p>
       </div>
 
-      <HeroStaircase half="top">
+      <HeroStaircase half="top" className="relative">
         {/* Runs the plateau — the same surface the cat used to sit on. It
             passes behind the taller steps at either end, clear of the text. */}
         <div

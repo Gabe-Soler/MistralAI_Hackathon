@@ -29,7 +29,6 @@ export const THINKING_STEPS: ThinkingStep[] = [
   { id: 's6', icon: 'retry', label: 'Re-ran 12 flaky cases at temperature 0' },
   {
     id: 's7',
-    variant: 'border',
     icon: 'found',
     label: `Found ${QA_ISSUES.length} issues — ${critical} critical`,
   },
