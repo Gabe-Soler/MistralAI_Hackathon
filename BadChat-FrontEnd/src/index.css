@@ -10,7 +10,7 @@
 
   /* BadChat hero. --hero-accent is the artwork's designed colour and the
      fallback the blocks render before useScrollPalette writes --hg-*. */
-  --hero-bg: #fffaf5;
+  --hero-bg: #fff5eb;
   --hero-ink: #54403e;
   --hero-neutral: #fff5eb;
   --hero-accent: #ff9533;
@@ -25,21 +25,21 @@
   /* Warmed to the hero palette so shadcn components sit in the same world as
      the artwork: cream grounds, warm brown ink, the staircase orange as
      primary and the ramp's deep red as destructive. */
-  --background: #fffaf5;
+  --background: #fff5eb;
 
   --foreground: #54403e;
 
-  --card: #fffaf5;
+  --card: #fff5eb;
 
   --card-foreground: #54403e;
 
-  --popover: #fffaf5;
+  --popover: #fff5eb;
 
   --popover-foreground: #54403e;
 
   --primary: #ff7900;
 
-  --primary-foreground: #fffaf5;
+  --primary-foreground: #fff5eb;
 
   --secondary: #f4ece2;
 
