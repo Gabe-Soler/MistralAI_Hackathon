@@ -175,6 +175,25 @@ with no target and no API key, so frontend work never blocks on the engine.
 **Editing the slash command:** edit `.vibe/skills/baduser/SKILL.md` (version controlled),
 then `make install-skill`. Editing the copy in `~/.vibe/skills/` only changes your laptop.
 
+## Managing processes and state
+
+Runs leave things behind: a dashboard server, a seeded database, run artifacts. Two
+commands rather than hunting for PIDs:
+
+```bash
+make status      # what is running: engine runs, dashboards (with their run + phase), target apps
+make clean       # stop engine runs, drop run artifacts and target databases
+make clean-all   # also stop target apps this project started
+```
+
+> **A dashboard belongs to one run.** Each invocation starts its own server and shows only
+> its own run — it never picks up a later one. If 8787 is taken the next run moves to 8788,
+> so an old browser tab will sit there looking stale forever. `make status` tells you which
+> port is serving which run.
+
+After `make clean` the target databases are gone, so **restart any target app** — it
+creates its schema at startup.
+
 ## Troubleshooting
 
 | symptom | cause |
@@ -184,6 +203,8 @@ then `make install-skill`. Editing the copy in `~/.vibe/skills/` only changes yo
 | `seeding failed: could not seed 2 tenants` | signup isn't open (email verification, OAuth, or CAPTCHA). Bad User can't test an app it can't get accounts on. |
 | `NO STEP REACHED THE TARGET` | the plays don't match this app's API. Check the URL, and that it serves `/openapi.json` or that `--repo` was passed. |
 | the run never exits | by design — the server stays up so the dashboard stays live. Use `--ci` to quit on completion. |
+| dashboard shows an old run | dashboards are per-run. `make status` to find the live one. |
+| Vibe asks to approve every command | `.vibe/config.toml` sets `default_agent = "auto-approve"`; it only applies in a trusted folder (`vibe --trust`). |
 | `no usable LLM` | no `MISTRAL_API_KEY` found. The run continues without the repo read. |
 
 ## Testing

@@ -1,0 +1,8 @@
+# Project config for Mistral Vibe. Applies when this folder is trusted (`vibe --trust`).
+
+# Run tools without an approval prompt. This is a hackathon repo whose whole job is
+# starting local servers and attacking them on loopback -- prompting on every bash call
+# makes the demo unusable. Both keys are needed: default_agent picks the profile,
+# bypass_tool_permissions skips the per-tool checks.
+default_agent = "auto-approve"
+bypass_tool_permissions = true
