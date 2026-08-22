@@ -106,6 +106,22 @@ def create_app(state: EngineState) -> FastAPI:
         so fetch("state") and new EventSource("stream") need no configuration."""
         return (Path(__file__).parent / "static" / "dashboard.html").read_text()
 
+    @app.get("/shots/{name}")
+    def shot(name: str):
+        """Serve a Browser Use frame. Screenshots are captured headless too -- headless
+        only removes the visible window, the page is still rendered and still captured."""
+        from fastapi.responses import FileResponse
+
+        # No traversal: the name must be a bare filename inside this run's shots dir.
+        if "/" in name or "\\" in name or name.startswith("."):
+            raise HTTPException(status_code=400, detail="bad name")
+        if state.store is None:
+            raise HTTPException(status_code=404, detail="no store")
+        path = state.store.shots / name
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="no such shot")
+        return FileResponse(path)
+
     @app.get("/state")
     def get_state() -> dict:
         return {

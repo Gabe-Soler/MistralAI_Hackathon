@@ -175,6 +175,20 @@ with no target and no API key, so frontend work never blocks on the engine.
 **Editing the slash command:** edit `.vibe/skills/baduser/SKILL.md` (version controlled),
 then `make install-skill`. Editing the copy in `~/.vibe/skills/` only changes your laptop.
 
+## The browser channel
+
+`--channels api,chat,web` adds a real browser (Browser Use). It runs **headless by
+default** — and headless still renders the page and still captures screenshots, which are
+served on the dashboard beside the evidence. Only the visible window goes away.
+
+```bash
+bad-user --target <URL> --channels api,chat,web              # headless, frames captured
+bad-user --target <URL> --channels api,chat,web --show-browser   # visible, for filming
+```
+
+Use `--show-browser` when you want the browser itself on camera. Headless is faster and
+will not steal focus from the dashboard on a projector.
+
 ## Managing processes and state
 
 Runs leave things behind: a dashboard server, a seeded database, run artifacts. Two

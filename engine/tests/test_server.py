@@ -175,3 +175,28 @@ async def test_ask_timeout_returns_safe_default():
     with pytest.raises(HTTPException) as e:
         state.answer("q1", "y")
     assert e.value.status_code == 404
+
+
+# --- screenshot serving (added when wiring headless frames to the dashboard) -----
+def test_shots_route_serves_a_frame_and_refuses_traversal(tmp_path):
+    """Headless still renders and still screenshots -- only the window goes away -- so the
+    frames have to reach the dashboard. And the filename must never escape shots/."""
+    from fastapi.testclient import TestClient
+
+    from baduser.bus import Bus
+    from baduser.models import SessionConfig
+    from baduser.server import EngineState, create_app
+    from baduser.store import Store
+
+    st = Store("run-shots", root=tmp_path)
+    (st.shots / "s1.png").write_bytes(b"\x89PNG\r\n\x1a\n-fake")
+    app = create_app(EngineState(SessionConfig(run_id="run-shots"), Bus(), st))
+    c = TestClient(app)
+
+    r = c.get("/shots/s1.png")
+    assert r.status_code == 200
+    assert r.content.startswith(b"\x89PNG")
+
+    assert c.get("/shots/missing.png").status_code == 404
+    for bad in ("..%2f..%2fetc%2fpasswd", ".hidden"):
+        assert c.get(f"/shots/{bad}").status_code in (400, 404)

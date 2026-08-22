@@ -309,6 +309,9 @@ def main(
     mock: bool = typer.Option(False, "--mock", help="scripted run: no target, no API keys"),
     speed: float = typer.Option(1.0, "--speed", help="mock pacing (0.2 = fast rehearsal)"),
     rps: float = typer.Option(5.0, "--rps", help="max requests/sec against the target"),
+    headless: bool = typer.Option(
+        True, "--headless/--show-browser",
+        help="run the web channel headless (screenshots are captured either way)"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="open the dashboard"),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8787, "--port"),
@@ -326,6 +329,7 @@ def main(
         replay=replay,
         ci=ci,
         rps=rps,
+        headless=headless,
     )
     store = Store(run_id)
     store.save_config(cfg)

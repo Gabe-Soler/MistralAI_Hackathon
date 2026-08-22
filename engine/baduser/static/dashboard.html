@@ -55,6 +55,7 @@ h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)
 .sd .should{border-color:rgba(47,158,107,.4)} .sd .did{border-color:rgba(229,72,77,.45)}
 .cite{color:var(--accent);font-size:11px;margin-bottom:4px}
 pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11.5px;color:#c8d3e0}
+.shot{display:block;margin-top:8px;max-width:100%;border:1px solid var(--line);border-radius:3px}
 mark{background:rgba(229,72,77,.32);color:#ffd9da;padding:0 1px;border-radius:2px}
 .empty{color:var(--dim)}
 .q{border:1px solid var(--accent);border-radius:4px;padding:9px 11px;margin-bottom:8px}
@@ -85,7 +86,7 @@ mark{background:rgba(229,72,77,.32);color:#ffd9da;padding:0 1px;border-radius:2p
 const $ = s => document.querySelector(s);
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c;
                           if (x !== undefined) n.textContent = x; return n; };
-const S = { tenants:new Map(), canaries:new Map(), leaked:new Set(),
+const S = { tenants:new Map(), canaries:new Map(), leaked:new Set(), shots:new Map(),
             lanes:new Map(), counts:{breach:0,benign:0,error:0} };
 
 // ---- world -----------------------------------------------------------------
@@ -139,6 +140,7 @@ function onStart(e){
   row.scrollIntoView({block:"nearest"});
 }
 function onFinish(e){
+  if (e.shot) S.shots.set(e.play_id + "|" + e.action, e.shot.split("/").pop());
   const L = lane(e.play_id);
   let row = L.steps.get(stepKey(e));
   if (!row){ onStart(e); row = L.steps.get(stepKey(e)); }
@@ -181,6 +183,14 @@ function onFinding(f){
   const did = el("div","col did");
   did.append(el("div","lab","did — " + f.channel + " as " + f.persona_id));
   const pre = el("pre"); pre.append(highlight(f.evidence || "")); did.append(pre);
+  // A picture of another company's data on screen beats any JSON blob. Captured even
+  // headless -- the page is still rendered, there is just no window.
+  const shot = S.shots.get(f.play_id + "|" + f.action);
+  if (shot){
+    const img = el("img"); img.className = "shot"; img.src = "shots/" + shot;
+    img.loading = "lazy"; img.alt = "browser frame";
+    did.append(img);
+  }
   wrap.append(should, did);
   box.prepend(wrap);
 }
