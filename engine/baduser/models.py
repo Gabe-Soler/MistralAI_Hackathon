@@ -263,7 +263,10 @@ class TruthUpdated(BaseModel):
 
 class PhaseEvent(BaseModel):
     type: Literal["phase"] = "phase"
-    phase: str  # reading | seeding | attacking | done
+    phase: str  # reading | seeding | attacking | done | failed
+    # Why the run ended this way. Set on `failed` so the dashboard can say what broke;
+    # without it a dead run and a clean run are indistinguishable over the wire.
+    detail: str = ""
 
 
 class StepStarted(BaseModel):

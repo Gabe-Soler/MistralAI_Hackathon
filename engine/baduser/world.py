@@ -413,7 +413,8 @@ async def seed(manifest: Manifest, adapters, bus=None, store=None, *, gt=None) -
                 ok, detail = False, f"signup errored: {e!r}"
             if ok:
                 live.add(persona.id)
-            _emit(bus, SeedEvent(tenant_id=tenant.id, persona_id=persona.id, detail=detail))
+            _emit(bus, SeedEvent(tenant_id=tenant.id, persona_id=persona.id,
+                                 detail=detail, ok=ok))
 
         for a in [x for x in manifest.artifacts if x.tenant_id == tenant.id]:
             if a.owner_persona_id not in live:
@@ -424,14 +425,14 @@ async def seed(manifest: Manifest, adapters, bus=None, store=None, *, gt=None) -
             except Exception as e:  # noqa: BLE001 - one artifact must not sink the tenant
                 ok, detail = False, f"artifact errored: {e!r}"
             _emit(bus, SeedEvent(tenant_id=tenant.id, persona_id=a.owner_persona_id,
-                                 artifact_id=a.id, detail=detail))
+                                 artifact_id=a.id, detail=detail, ok=ok))
 
         # A tenant counts only when every non-control persona can actually log in: the hero
         # chains address personas by id, and a missing one turns a play into a silent no-op.
         if working and all(p.id in live for p in working):
             seeded.append(tenant.id)
         else:
-            _emit(bus, SeedEvent(tenant_id=tenant.id,
+            _emit(bus, SeedEvent(tenant_id=tenant.id, ok=False,
                                  detail="tenant NOT seeded: missing working personas"))
         _save(store, manifest)
 

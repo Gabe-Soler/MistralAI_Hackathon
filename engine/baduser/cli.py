@@ -131,6 +131,18 @@ def fallback_ground_truth(target: str) -> GroundTruth:
     )
 
 
+def _fail(state: EngineState, bus: Bus, detail: str) -> None:
+    """End the run as `failed`, not `done`.
+
+    Both callers previously emitted `done` with no findings, which made a run that proved
+    NOTHING indistinguishable from a clean one -- green in the dashboard and, worse, exit 0
+    under --ci. That is the false clean this tool exists to prevent (oracle.py, PLAN 14).
+    """
+    state.phase = "failed"
+    state.phase_detail = detail
+    bus.emit(PhaseEvent(phase="failed", detail=detail))
+
+
 async def pipeline(state: EngineState) -> None:
     """The real run (PLAN 17): read -> seed -> attack -> report.
 
@@ -187,8 +199,7 @@ async def pipeline(state: EngineState) -> None:
         # Fewer than two tenants means every cross-tenant check passes vacuously and the
         # run would report a false clean. Abort loudly instead (PLAN 11c).
         typer.secho(f"  seeding failed: {e}", fg="red")
-        state.phase = "done"
-        bus.emit(PhaseEvent(phase="done"))
+        _fail(state, bus, f"seeding failed: {e}")
         return
     state.manifest = manifest
     typer.echo(
@@ -218,8 +229,10 @@ async def pipeline(state: EngineState) -> None:
             "  The plays do not match this app's API. This is NOT a clean result.",
             fg="red", bold=True,
         )
-        state.phase = "done"
-        bus.emit(PhaseEvent(phase="done"))
+        _fail(
+            state, bus,
+            f"no step reached the target: {len(ctx.reached)} attempts, none got a 2xx",
+        )
         return
 
     breaches = sum(1 for f in state.findings if f.verdict == Verdict.breach)
@@ -288,6 +301,8 @@ async def _run(
         await drive()
         server.should_exit = True
         await server_task
+        if state.phase == "failed":
+            return 2  # distinct from 1 (breach found): the run itself did not prove anything
         return 1 if any(f.verdict == Verdict.breach for f in state.findings) else 0
     # demo mode: server stays up after the pipeline finishes so the dashboard stays live.
     await asyncio.gather(server.serve(), drive())
