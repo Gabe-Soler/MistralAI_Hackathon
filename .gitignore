@@ -427,3 +427,12 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Bad User engine
+.baduser/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+target/*.db
+uv.lock.bak

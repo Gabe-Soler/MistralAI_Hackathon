@@ -1,0 +1,80 @@
+{
+  "note": "Expected outcome per probe. verdict null = the oracle must return NO finding. Bugs prove there are no false negatives; ok/control/chain cases prove there are no false positives. evals/run_eval.py fails if the case ids here and the probes it runs ever drift apart.",
+  "cases": {
+    "OK-4": {
+      "kind": "ok",
+      "status": 401,
+      "verdict": null,
+      "desc": "unauthenticated GET /api/invoices -> 401"
+    },
+    "OK-3": {
+      "kind": "ok",
+      "status": 200,
+      "verdict": null,
+      "desc": "GET /api/me returns the caller's own row (own canary is not a leak)"
+    },
+    "OK-1": {
+      "kind": "ok",
+      "status": 200,
+      "verdict": null,
+      "desc": "GET /api/invoices/{id} for an invoice the caller DOES own -> 200"
+    },
+    "OK-5": {
+      "kind": "ok",
+      "status": 200,
+      "verdict": null,
+      "desc": "GET /api/documents/{id} for a document the caller DOES own -> 200"
+    },
+    "OK-2": {
+      "kind": "ok",
+      "status": 403,
+      "verdict": null,
+      "must_quote_ref": true,
+      "desc": "cross-tenant GET /api/documents/{id} -> 403 whose body QUOTES the id and title; a naive detector calls this a leak"
+    },
+    "CTRL-BUG-4": {
+      "kind": "control",
+      "status": 403,
+      "verdict": null,
+      "must_quote_ref": true,
+      "desc": "the control run: step four ALONE, with no invite -> 403. This is what makes BUG-4 meaningful"
+    },
+    "BUG-1": {
+      "kind": "bug",
+      "status": 200,
+      "verdict": "breach",
+      "desc": "IDOR: GET /api/invoices/{id} does not check tenant ownership"
+    },
+    "BUG-2": {
+      "kind": "bug",
+      "status": 200,
+      "verdict": "breach",
+      "desc": "listing leak: GET /api/invoices returns every tenant's invoices"
+    },
+    "BUG-3": {
+      "kind": "bug",
+      "status": 200,
+      "verdict": "breach",
+      "must_not_contain_ids": true,
+      "desc": "chat leak: POST /api/chat answers out of another tenant's content, in prose, with no id to match on"
+    },
+    "CHAIN-4a": {
+      "kind": "chain",
+      "status": 201,
+      "verdict": null,
+      "desc": "compound step 1-2: the inviter shares ONE invoice by email -> benign"
+    },
+    "CHAIN-4b": {
+      "kind": "chain",
+      "status": 200,
+      "verdict": null,
+      "desc": "compound step 3: the outsider accepts the invite -> benign, and says nothing about the tenant it just joined them to"
+    },
+    "BUG-4": {
+      "kind": "bug",
+      "status": 200,
+      "verdict": "breach",
+      "desc": "compound: the same read that was 403 in CTRL-BUG-4 is now 200, because accepting the invite silently granted tenant membership"
+    }
+  }
+}
