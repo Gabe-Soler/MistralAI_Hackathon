@@ -100,28 +100,6 @@ body {
   margin: 0;
 }
 
-/* The walking cat's track: it enters off the left edge and leaves by the
-   right, travelling one viewport plus its own width. Its container clips it. */
-@keyframes cat-run {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(100vw);
-  }
-}
-
-.cat-run {
-  animation: cat-run 14s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cat-run {
-    animation: none;
-    transform: translateX(38vw);
-  }
-}
-
 @theme inline {
   --font-heading: var(--font-mono);
   --font-mono: 'JetBrains Mono Variable', monospace;
