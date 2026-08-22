@@ -63,6 +63,18 @@ _TOKEN_KEYS = ("access_token", "token", "accessToken", "jwt", "id_token", "sessi
                "sessionToken", "api_key")
 _ARTIFACT_PATHS = ["/api/documents", "/api/items", "/api/invoices", "/documents", "/items"]
 
+# Never post an artifact at an auth route. Signup in particular accepts a create-shaped
+# body and answers 201, so it counts as a successful artifact while actually registering a
+# NEW TENANT named after the artifact -- the manifest then describes a world that does not
+# match the app, and every later cross-tenant read is against the wrong boundary. Only
+# `login` was excluded before, which caught none of the others.
+_AUTH_PATH_WORDS = ("signup", "sign-up", "register", "login", "sign-in", "signin",
+                    "auth", "token", "session", "logout", "password", "reset")
+
+
+def _is_auth_path(path: str) -> bool:
+    return any(w in path.lower() for w in _AUTH_PATH_WORDS)
+
 
 class SeedError(RuntimeError):
     """Raised when the world could not be created. Never downgraded to a warning."""
@@ -256,8 +268,31 @@ def _signup_payload(persona: Persona, tenant: Tenant) -> dict[str, str]:
     }
 
 
-def _artifact_payload(a: Artifact) -> dict[str, Any]:
-    return {
+# Field names whose VALUE cannot be arbitrary text without risking a 422 or a nonsense
+# row. Everything else discovered on a create route gets canary-bearing text.
+_NUMERIC_KEYS = {"amount", "total", "price", "cost", "qty", "quantity", "count",
+                 "value", "subtotal", "tax", "invoice_id", "parent_id"}
+_DATE_KEYS = {"due_date", "date", "starts_at", "ends_at", "expires_at", "created_at"}
+_FIXED_KEYS = {"currency": "USD", "status": "open", "state": "open", "type": "document"}
+
+
+def _artifact_payload(a: Artifact, body_keys: list[str] | None = None) -> dict[str, Any]:
+    """The body for a create call, shaped to the route when we know its schema.
+
+    The guessed keys below are a shotgun: they hit apps that happen to call the field
+    `title` or `body`, and miss everything else. `/openapi.json` tells us the real field
+    names (discover.from_openapi), and ignoring that is why seeding failed on any app whose
+    create route wanted, say, {number, client} -- required fields missing is a 422, every
+    time, and the run then has nothing to read cross-tenant and reports a false clean.
+
+    Extra keys are harmless (pydantic ignores unknown fields by default), so the guesses
+    stay as a fallback for targets with no OpenAPI.
+
+    The canary MUST land in a field the app actually stores. Filling only the shotgun keys
+    on an app that stores none of them creates rows with no tag in them, which detects
+    nothing while looking like a healthy seed -- worse than failing.
+    """
+    payload: dict[str, Any] = {
         "title": a.title,
         "name": a.title,
         "body": a.body,
@@ -266,6 +301,27 @@ def _artifact_payload(a: Artifact) -> dict[str, Any]:
         "kind": a.kind,
         "amount": str(a.amount) if a.amount is not None else None,
     }
+    if not body_keys:
+        return payload
+
+    tagged = False
+    for key in body_keys:
+        low = key.lower()
+        if low in _FIXED_KEYS:
+            payload[key] = _FIXED_KEYS[low]
+        elif low in _NUMERIC_KEYS or low.endswith("_id"):
+            payload[key] = float(a.amount) if a.amount is not None else 1
+        elif low in _DATE_KEYS or low.endswith("_at") or low.endswith("_date"):
+            payload[key] = "2026-12-31"
+        else:
+            # Free text: carry the canary. a.title and a.body both embed it.
+            payload[key] = a.title if not tagged else a.body
+            tagged = True
+    if not tagged:
+        # Every discovered field was numeric or a date, so nothing we wrote is detectable.
+        # Fall back to the guessed text keys rather than seeding an untaggable row.
+        payload.setdefault("title", a.title)
+    return payload
 
 
 def _artifact_candidates(gt: GroundTruth, kind: str) -> list[str]:
@@ -273,10 +329,11 @@ def _artifact_candidates(gt: GroundTruth, kind: str) -> list[str]:
     found = []
     for e in gt.endpoints:
         _, path = parse_hint(e, "")
-        if path and path.count("/") <= 3 and "{" not in path and not path.endswith("login"):
+        if path and path.count("/") <= 3 and "{" not in path and not _is_auth_path(path):
             found.append(path)
     plural = f"/api/{kind}s"
-    return list(dict.fromkeys([*found, plural, *_ARTIFACT_PATHS]))
+    ordered = [*found, plural, *_ARTIFACT_PATHS]
+    return [p for p in dict.fromkeys(ordered) if not _is_auth_path(p)]
 
 
 def _token_of(raw: str) -> str:
@@ -427,7 +484,7 @@ async def _create_artifact(a: Artifact, gt: GroundTruth, adapters, state) -> boo
     signup only (PLAN 11c budget). Falls back to the web channel when there is no api."""
     api = adapters.get(Channel.api)
     if api is not None:
-        body = json.dumps(_artifact_payload(a))
+        bodies = gt.endpoint_bodies if gt else {}
         # Spread artifacts across EVERY collection that works, rather than caching the
         # first one. An app with /api/documents and /api/invoices must end up with data in
         # both: seed only documents and `GET /api/invoices` returns [], which reads as a
@@ -449,6 +506,7 @@ async def _create_artifact(a: Artifact, gt: GroundTruth, adapters, state) -> boo
         else:
             paths = candidates
         for path in paths:
+            body = json.dumps(_artifact_payload(a, bodies.get(f"POST {path}")))
             step = Step(id=f"seed-artifact-{a.id}", persona_id=a.owner_persona_id,
                         channel=Channel.api, action=f"POST {path} {body}")
             tried.add(path)
