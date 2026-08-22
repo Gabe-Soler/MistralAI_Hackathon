@@ -5,8 +5,8 @@
 
 @custom-variant dark (&:is(.dark *));
 :root {
-  --border: oklch(0.922 0 0);
-  --accent: oklch(0.97 0 0);
+  --border: #e7dbcd;
+  --accent: #f4ece2;
 
   /* BadChat hero. --hero-accent is the artwork's designed colour and the
      fallback the blocks render before useScrollPalette writes --hg-*. */
@@ -14,6 +14,7 @@
   --hero-ink: #54403e;
   --hero-neutral: #eaeaea;
   --hero-accent: #ff7900;
+  --hero-shadow: rgb(84 64 62 / 0.3);
 
   color-scheme: light;
   font-synthesis: none;
@@ -21,37 +22,40 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --background: oklch(1 0 0);
+  /* Warmed to the hero palette so shadcn components sit in the same world as
+     the artwork: cream grounds, warm brown ink, the staircase orange as
+     primary and the ramp's deep red as destructive. */
+  --background: #fffbf5;
 
-  --foreground: oklch(0.145 0 0);
+  --foreground: #54403e;
 
-  --card: oklch(1 0 0);
+  --card: #fffbf5;
 
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: #54403e;
 
-  --popover: oklch(1 0 0);
+  --popover: #fffbf5;
 
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: #54403e;
 
-  --primary: oklch(0.205 0 0);
+  --primary: #ff7900;
 
-  --primary-foreground: oklch(0.985 0 0);
+  --primary-foreground: #fffbf5;
 
-  --secondary: oklch(0.97 0 0);
+  --secondary: #f4ece2;
 
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary-foreground: #54403e;
 
-  --muted: oklch(0.97 0 0);
+  --muted: #f4ece2;
 
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: #8a7370;
 
-  --accent-foreground: oklch(0.205 0 0);
+  --accent-foreground: #54403e;
 
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: #d70006;
 
-  --input: oklch(0.922 0 0);
+  --input: #e7dbcd;
 
-  --ring: oklch(0.708 0 0);
+  --ring: #ff7900;
 
   --chart-1: oklch(0.87 0 0);
 
@@ -63,7 +67,9 @@
 
   --chart-5: oklch(0.269 0 0);
 
-  --radius: 0.625rem;
+  /* Mistral design language: square corners throughout. Every --radius-* step
+     derives from this, so the whole component set follows. */
+  --radius: 0rem;
 
   --sidebar: oklch(0.985 0 0);
 

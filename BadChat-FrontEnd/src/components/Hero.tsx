@@ -1,27 +1,16 @@
 import { HeroStaircase } from '@/components/HeroStaircase'
-import { FIRST_STEP_SURFACE, HALF_ASPECT } from '@/components/heroGrid'
+import { FIRST_STEP_SURFACE } from '@/components/heroGrid'
+import { WALKING_CAT, catAspect, fitCat } from '@/lib/cats'
+
+/** The cat's width, as a fraction of the staircase's width. */
+const CAT_WIDTH = '11%'
 
 /**
- * animated-sitting-cat.gif is a 896² frame that is mostly transparent — the cat
- * only occupies the box below, measured as the union across all 27 frames so
- * the tail's full swing is included. Without compensating for that padding the
- * image box would sit on the step while the cat appeared to float above it.
+ * Carries the cat from fully off the left edge to fully off the right one:
+ * `100cqw` is the staircase's width, `100%` the cat's own. Driven entirely by
+ * `--cat-run`, which useSceneScroll writes from scroll position.
  */
-const CAT_CONTENT = { left: 32 / 896, bottom: 1 - 608 / 896, width: 704 / 896 }
-
-/** Where the cat should stand, as fractions of the staircase's width. */
-const CAT_TARGET = { left: 0.564, width: 0.171 }
-
-/** Scale the frame up so its *content* spans the target width. */
-const catFrameWidth = CAT_TARGET.width / CAT_CONTENT.width
-
-const catStyle = {
-  width: `${catFrameWidth * 100}%`,
-  left: `${(CAT_TARGET.left - CAT_CONTENT.left * catFrameWidth) * 100}%`,
-  // The frame is square, so its height in half-heights is width / aspect. Drop
-  // it by its bottom padding to land the cat's feet on the step surface.
-  bottom: `${(FIRST_STEP_SURFACE - CAT_CONTENT.bottom * (catFrameWidth / HALF_ASPECT)) * 100}%`,
-}
+const CAT_TRAVEL = 'translateX(calc(var(--cat-run, 0) * (100cqw + 100%) - 100%))'
 
 export function Hero() {
   return (
@@ -31,7 +20,7 @@ export function Hero() {
           className="m-0 font-mono font-normal leading-[0.9] tracking-[-0.02em] text-[var(--hero-ink)]"
           style={{ fontSize: 'clamp(3.25rem, 12vw, 15rem)' }}
         >
-          BadUser
+          BadChat
         </h1>
         <p
           className="m-0 mt-[4vh] font-mono tracking-[0.12em] text-[var(--hero-ink)] opacity-75"
@@ -42,13 +31,27 @@ export function Hero() {
       </div>
 
       <HeroStaircase half="top">
-        <img
-          src="/animated-sitting-cat.gif"
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute select-none"
-          style={catStyle}
-        />
+        {/* Runs the plateau — the same surface the cat used to sit on. It
+            passes behind the taller steps at either end, clear of the text. */}
+        <div
+          className="absolute will-change-transform"
+          style={{
+            width: CAT_WIDTH,
+            aspectRatio: catAspect(WALKING_CAT),
+            bottom: `${FIRST_STEP_SURFACE * 100}%`,
+            transform: CAT_TRAVEL,
+          }}
+        >
+          <div
+            aria-hidden="true"
+            className="absolute bottom-0 left-1/2 h-[9%] w-[78%] -translate-x-1/2 translate-y-[45%] rounded-[50%]"
+            style={{
+              background:
+                'radial-gradient(closest-side, var(--hero-shadow), transparent)',
+            }}
+          />
+          <img src={WALKING_CAT.src} alt="" aria-hidden="true" style={fitCat(WALKING_CAT)} />
+        </div>
       </HeroStaircase>
     </section>
   )

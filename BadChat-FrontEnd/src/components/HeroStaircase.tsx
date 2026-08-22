@@ -32,10 +32,14 @@ export function HeroStaircase({
   const cells = half === 'top' ? TOP_CELLS : BOTTOM_CELLS
 
   return (
-    <div className={cn('relative w-full', className)}>
+    // @container so anything standing on the steps can size and travel in
+    // `cqw` — the staircase's own width, independent of the scrollbar.
+    <div className={cn('@container relative w-full', className)}>
       <svg
         ref={ref}
-        className="block h-auto w-full"
+        // Stacked above `children`, so anything walking the steps is occluded
+        // by the blocks instead of sliding over them.
+        className="relative z-10 block h-auto w-full"
         viewBox={`0 0 ${COLS * COL} ${FOLD * ROW}`}
         preserveAspectRatio="xMidYMid meet"
         fill="none"
