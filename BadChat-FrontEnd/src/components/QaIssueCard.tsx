@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy } from '@phosphor-icons/react'
-import { QA_ISSUES, SEVERITY_COLOR, type QaIssue } from '@/lib/qaIssues'
-import { stagger } from '@/lib/stagger'
+import { SEVERITY_COLOR, type QaIssue } from '@/lib/qaIssues'
+import { reveal, type RevealMode } from '@/lib/reveal'
 
 interface QaIssueCardProps {
   issue: QaIssue
   /** Position in the list, used to stagger the reveal. */
   index: number
+  /** How many cards there are. Must come from the caller: a live list grows, and reading
+      a module constant here staggered every run against the mock array's length. */
+  count: number
+  /** `scroll` deals a finished run out on scroll; `live` animates each card on arrival. */
+  mode?: RevealMode
 }
 
-export function QaIssueCard({ issue, index }: QaIssueCardProps) {
+export function QaIssueCard({ issue, index, count, mode = 'scroll' }: QaIssueCardProps) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
@@ -32,7 +37,7 @@ export function QaIssueCard({ issue, index }: QaIssueCardProps) {
     <article
       className="border border-[var(--border)] bg-[var(--card)] p-8 sm:p-10"
       // Each card crosses its own slice of --cards-in, so they land in sequence.
-      style={stagger(index, '--cards-in', QA_ISSUES.length, { fade: 0.3, lift: '1.25rem' })}
+      style={reveal(index, count, '--cards-in', mode, { fade: 0.3, lift: '1.25rem' })}
     >
       <div className="flex items-center gap-4">
         {/* A flat block of colour, echoing the staircase's tiers. */}

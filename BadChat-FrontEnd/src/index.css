@@ -185,6 +185,40 @@ body {
   cursor: none !important;
 }
 
+/* Live items animate on mount rather than on scroll -- see lib/reveal.ts. */
+@keyframes reveal-in {
+  from { opacity: 0; transform: translateY(0.75rem); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The "still working" affordance on a running step. ThinkingTranscript has referenced
+   this class since it was written; it was never defined, so active work looked identical
+   to finished work. */
+@keyframes shimmer-sweep {
+  to { background-position: -200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--foreground) 0%,
+    var(--foreground) 40%,
+    var(--muted-foreground) 50%,
+    var(--foreground) 60%,
+    var(--foreground) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-sweep 2.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { animation: none; background: none; color: var(--foreground); }
+  [style*="reveal-in"] { animation: none !important; }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;}

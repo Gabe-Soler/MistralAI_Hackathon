@@ -7,8 +7,8 @@ import {
 } from '@phosphor-icons/react'
 import { CatMarkerIcon } from '@/components/CatFigure'
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker'
-import { stagger } from '@/lib/stagger'
-import { THINKING_STEPS, type StepIcon } from '@/lib/thinkingSteps'
+import { THINKING_STEPS, type StepIcon, type ThinkingStep } from '@/lib/thinkingSteps'
+import { reveal, type RevealMode } from '@/lib/reveal'
 
 const ICONS: Record<StepIcon, typeof FolderOpen> = {
   files: FolderOpen,
@@ -18,13 +18,22 @@ const ICONS: Record<StepIcon, typeof FolderOpen> = {
   found: Warning,
 }
 
-export function ThinkingTranscript() {
+interface ThinkingTranscriptProps {
+  /** Defaults to the placeholder log, so the landing page is unchanged. */
+  steps?: ThinkingStep[]
+  mode?: RevealMode
+}
+
+export function ThinkingTranscript({
+  steps: items = THINKING_STEPS,
+  mode = 'scroll',
+}: ThinkingTranscriptProps) {
   return (
     <div className="flex flex-col gap-3">
-      {THINKING_STEPS.map((step, index) => {
+      {items.map((step, index) => {
         const Icon = step.icon ? ICONS[step.icon] : null
         return (
-          <div key={step.id} style={stagger(index, '--steps-in', THINKING_STEPS.length)}>
+          <div key={step.id} style={reveal(index, items.length, '--steps-in', mode)}>
             <Marker
               variant={step.variant}
               // Active work is announced to assistive tech, per the docs.

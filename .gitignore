@@ -439,3 +439,6 @@ uv.lock.bak
 
 # macOS
 .DS_Store
+
+# Built SPA, produced by 'make web' from BadChat-FrontEnd.
+engine/baduser/web/

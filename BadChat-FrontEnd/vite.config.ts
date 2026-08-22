@@ -11,6 +11,13 @@ const ENGINE = "http://127.0.0.1:8787";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    // Inside the package, next to static/, so a globally-installed bad-user serves it.
+    outDir: path.resolve(import.meta.dirname, "../engine/baduser/web"),
+    // Required: vite refuses to clean an outDir outside the project root without it, and
+    // would otherwise leave stale hashed assets behind forever.
+    emptyOutDir: true,
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),

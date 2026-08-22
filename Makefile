@@ -5,7 +5,7 @@
 #
 # Everything runs offline, no API keys.
 
-.PHONY: setup install install-cli install-skill test lint target mock demo live eval check clean clean-all status
+.PHONY: setup install install-cli install-skill test lint target mock demo live eval check clean clean-all status web
 
 UV := cd engine && uv run --extra dev
 
@@ -78,5 +78,10 @@ clean:
 # they create their schema at startup, so a dropped database needs a fresh boot.
 clean-all:
 	@./scripts/baduser-clean.sh --all
+
+# Build the dashboard into engine/baduser/web/, where the server picks it up. Without
+# this the engine still runs -- / falls back to the self-contained dev dashboard.
+web:
+	cd BadChat-FrontEnd && npm run build
 
 check: lint test eval

@@ -291,7 +291,9 @@ async def _run(
         else:
             await pipeline(state)
 
-    url = f"http://{host}:{port}"
+    # The run's own page, not the landing page: /baduser should land you on what it just
+    # started. The SPA reads the id straight out of the path.
+    url = f"http://{host}:{port}/{state.config.run_id}"
     typer.secho(f"\n  dashboard -> {url}" + ("   [mock]" if mock else ""), fg="cyan", bold=True)
     typer.echo("  ctrl-c to stop\n")
     if open_browser and not ci:

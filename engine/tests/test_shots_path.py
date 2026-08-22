@@ -74,12 +74,34 @@ def test_shots_are_run_scoped(tmp_path: Path) -> None:
     assert c.get("/api/20260822-130000/shots/s1.png").status_code == 404
 
 
-def test_traversal_is_refused_on_both_routes(tmp_path: Path) -> None:
+def test_traversal_never_serves_a_file_outside_the_shots_dir(tmp_path: Path) -> None:
+    """Assert on the bytes, not the status code.
+
+    A bare `../secret.png` never reaches the handler at all -- the HTTP client normalises
+    it to `/secret.png` before sending, and the SPA catch-all then answers it with
+    index.html, which is correct behaviour for an unknown client route. Checking for 4xx
+    would therefore pass or fail for reasons unrelated to traversal. What must hold is
+    that the secret's bytes are never returned by any of these.
+    """
     store = Store("20260822-120000", root=tmp_path)
-    (tmp_path / "secret.png").write_bytes(b"nope")
+    secret = b"SECRET-OUTSIDE-SHOTS"
+    (tmp_path / "secret.png").write_bytes(secret)
+    (store.shots.parent / "manifest.json").write_bytes(secret)
     c = TestClient(create_app(EngineState(SessionConfig(run_id="20260822-120000"),
                                           Bus(), store)))
 
-    for bad in ("../secret.png", "..%2f..%2fetc%2fpasswd", ".hidden", "a/b.png"):
+    for bad in ("../secret.png", "..%2f..%2fsecret.png", "%2e%2e%2fmanifest.json",
+                ".hidden", "a/b.png", "....//secret.png"):
+        for url in (f"/shots/{bad}", f"/api/20260822-120000/shots/{bad}"):
+            assert secret not in c.get(url).content, url
+
+
+def test_the_shots_handler_itself_refuses_the_obvious_shapes(tmp_path: Path) -> None:
+    """Reaching the handler directly, the string guard is what returns 400."""
+    store = Store("20260822-120000", root=tmp_path)
+    c = TestClient(create_app(EngineState(SessionConfig(run_id="20260822-120000"),
+                                          Bus(), store)))
+
+    for bad in ("..%2f..%2fetc%2fpasswd", ".hidden"):
         assert c.get(f"/shots/{bad}").status_code in (400, 404), bad
         assert c.get(f"/api/20260822-120000/shots/{bad}").status_code in (400, 404), bad

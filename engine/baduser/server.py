@@ -333,10 +333,15 @@ def create_app(state: EngineState | None = None, *, registry: Registry | None = 
 
     app.include_router(api)
 
-    @app.get("/", response_class=HTMLResponse)
+    @app.get("/dev", response_class=HTMLResponse)
     def dashboard() -> str:
         """The dev dashboard: one self-contained file, no build step, served same-origin
-        so fetch("state") and new EventSource("stream") need no configuration."""
+        so fetch("state") and new EventSource("stream") need no configuration.
+
+        Kept after the SPA landed. It needs no npm, so it is the fallback when the bundle
+        is missing or broken -- and its relative fetch("state") still resolves to /state
+        from here, because /dev has no trailing slash.
+        """
         return (Path(__file__).parent / "static" / "dashboard.html").read_text()
 
     # --- the current run, unprefixed: pinned by test_server.py, used by dashboard.html ---
@@ -358,4 +363,42 @@ def create_app(state: EngineState | None = None, *, registry: Registry | None = 
         registry.current_state().answer(body.question_id, body.answer)
         return {"ok": True}
 
+    _mount_spa(app)
     return app
+
+
+# Paths the SPA catch-all must never answer for. Registration order already protects them
+# -- starlette matches in order -- but the guard is what makes /api/typo return JSON
+# rather than index.html. A fetch that receives HTML fails at JSON.parse with a message
+# naming neither the route nor the cause, which is an hour of debugging for one line here.
+_RESERVED = ("api", "openapi.json", "docs", "redoc", "dev", "state", "stream", "answer",
+             "shots")
+
+
+def _mount_spa(app: FastAPI) -> None:
+    """Serve the built SPA, if `make web` has produced one.
+
+    When it has not, / falls back to the dev dashboard rather than 404ing, so `bad-user`
+    is useful with no npm involvement at all.
+    """
+    web = Path(__file__).parent / "web"
+    index = web / "index.html"
+
+    if not index.is_file():
+        @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+        def _no_spa() -> str:
+            return (Path(__file__).parent / "static" / "dashboard.html").read_text()
+
+        return
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str) -> FileResponse:
+        head = full_path.split("/", 1)[0]
+        if head in _RESERVED:
+            raise HTTPException(status_code=404, detail=f"no such route: /{full_path}")
+        # A real file (assets/, favicon, the cat gifs) is served as itself; anything else
+        # is a client route like /<run_id> and gets index.html.
+        candidate = (web / full_path).resolve()
+        if full_path and candidate.is_file() and candidate.is_relative_to(web.resolve()):
+            return FileResponse(candidate)
+        return FileResponse(index)
