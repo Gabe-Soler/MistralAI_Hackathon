@@ -58,6 +58,26 @@ make setup
 `make setup` installs dependencies, puts **`bad-user` on your PATH**, and installs the
 **`/baduser` command** into [Mistral Vibe](https://github.com/mistralai/vibe).
 
+### Or install it without cloning
+
+Just want the tool, not the repo? Two commands, no checkout:
+
+```bash
+# the CLI, from GitHub
+uv tool install "git+https://github.com/Gabe-Soler/MistralAI_Hackathon.git#subdirectory=engine"
+
+# the /baduser command for Mistral Vibe
+mkdir -p ~/.vibe/skills/baduser && curl -sfL \
+  https://raw.githubusercontent.com/Gabe-Soler/MistralAI_Hackathon/main/.vibe/skills/baduser/SKILL.md \
+  -o ~/.vibe/skills/baduser/SKILL.md
+```
+
+`bad-user` then works from any directory, and `/baduser` is available in every Vibe
+session — including the scratch folder where you just vibe-coded an app. Re-run the first
+command to upgrade.
+
+You still need the repo if you want `make target`, `make mock`, or the eval.
+
 Then a key — Bad User reads it from the environment, `./.env`, or `~/.vibe/.env`:
 
 ```bash
@@ -82,6 +102,10 @@ No target and no key? `make mock` drives the dashboard from a scripted run.
 vibe --trust
 > /baduser against http://127.0.0.1:8000 with --repo ./target
 ```
+
+It backgrounds the run, **opens the dashboard in your browser**, and reports the outcome
+in the same turn. `.vibe/config.toml` sets `default_agent = "auto-approve"` so it does not
+prompt on every command.
 
 > **`--trust` is not optional.** Vibe ignores project and global skills in an untrusted
 > folder — it prints one easily-missed warning and `/baduser` simply won't exist.
@@ -143,7 +167,7 @@ seeding proves only the handful of routes it needs.
 ## Layout
 
 ```
-engine/              the engine (Python, uv) + 137 tests
+engine/              the engine (Python, uv) + 139 tests
   baduser/
     oracle.py        the detector — ~100 lines, the actual product
     world.py         world synthesis + seeding
@@ -224,7 +248,7 @@ creates its schema at startup.
 ## Testing
 
 ```bash
-make check     # lint + 137 tests + eval
+make check     # lint + 139 tests + eval
 ```
 
 The eval is the one that matters. It boots the vulnerable app, seeds it, and asserts
