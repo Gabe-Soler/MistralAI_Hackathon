@@ -176,7 +176,10 @@ async def pipeline(state: EngineState) -> None:
     bus.emit(PhaseEvent(phase="seeding"))
     manifest = synth_world(gt, cfg.run_id)
     state.manifest = manifest
-    adapters = build_adapters(cfg, manifest, runs_dir=str(state.store.dir) if state.store else None)
+    # store.dir.parent, not store.dir: shots_dir() appends run_id itself, so passing the
+    # run directory nested it twice and the /shots route never found a frame.
+    runs_root = str(state.store.dir.parent) if state.store else None
+    adapters = build_adapters(cfg, manifest, runs_dir=runs_root)
 
     # Discover BEFORE seeding: a generated FastAPI app serves /openapi.json, which gives
     # exact paths and body shapes for free. Seeding then knows which collections exist and
@@ -263,15 +266,19 @@ async def _run(
     speed: float = 1.0,
     open_browser: bool = False,
 ) -> int:
-    # Fail readably. Without this, a second run dies in a uvicorn traceback and the only
-    # symptom the user sees is "the dashboard doesn't open".
+    # A busy port is not a failure -- just take the next one. Erroring out meant a
+    # leftover dashboard from an earlier run blocked every subsequent run, and an agent
+    # driving this saw a message none of its success/failure patterns matched, so it sat
+    # waiting on a process that had already exited.
     if not _port_free(host, port):
-        typer.secho(
-            f"  port {port} is already in use -- another run is probably still going.\n"
-            f"  stop it, or use --port {port + 1}",
-            fg="red",
-        )
-        return 2
+        for candidate in range(port + 1, port + 21):
+            if _port_free(host, candidate):
+                typer.secho(f"  port {port} busy -- using {candidate}", fg="yellow")
+                port = candidate
+                break
+        else:
+            typer.secho(f"  no free port in {port}-{port + 20}. FAILED, nothing ran.", fg="red")
+            return 2
 
     config = uvicorn.Config(create_app(state), host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
@@ -320,6 +327,9 @@ def main(
     mock: bool = typer.Option(False, "--mock", help="scripted run: no target, no API keys"),
     speed: float = typer.Option(1.0, "--speed", help="mock pacing (0.2 = fast rehearsal)"),
     rps: float = typer.Option(5.0, "--rps", help="max requests/sec against the target"),
+    headless: bool = typer.Option(
+        True, "--headless/--show-browser",
+        help="run the web channel headless (screenshots are captured either way)"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="open the dashboard"),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8787, "--port"),
@@ -337,6 +347,7 @@ def main(
         replay=replay,
         ci=ci,
         rps=rps,
+        headless=headless,
     )
     store = Store(run_id)
     store.save_config(cfg)

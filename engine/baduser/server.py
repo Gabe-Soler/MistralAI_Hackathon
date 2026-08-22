@@ -25,7 +25,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
@@ -264,6 +264,25 @@ def _stream_response(state: EngineState, request: Request) -> EventSourceRespons
     )
 
 
+def _shot_response(state: EngineState, name: str) -> FileResponse:
+    """Serve a Browser Use frame. Screenshots are captured headless too -- headless only
+    removes the visible window, the page is still rendered and still captured.
+
+    Two layers of traversal defence. The string check rejects the obvious shapes and is
+    what returns 400; resolve() + is_relative_to() then neutralises anything that survives
+    it -- symlinks, absolute paths, encodings the first check did not anticipate.
+    """
+    if "/" in name or "\\" in name or name.startswith("."):
+        raise HTTPException(status_code=400, detail="bad name")
+    if state.store is None:
+        raise HTTPException(status_code=404, detail="no store")
+    root = state.store.shots.resolve()
+    path = (root / name).resolve()
+    if not path.is_file() or not path.is_relative_to(root):
+        raise HTTPException(status_code=404, detail="no such shot")
+    return FileResponse(path)
+
+
 def create_app(state: EngineState | None = None, *, registry: Registry | None = None) -> FastAPI:
     """Serve one run or many.
 
@@ -303,6 +322,10 @@ def create_app(state: EngineState | None = None, *, registry: Registry | None = 
     async def run_stream(run_id: str, request: Request) -> EventSourceResponse:
         return _stream_response(registry.get(run_id), request)
 
+    @api.get("/{run_id}/shots/{name}")
+    def run_shot(run_id: str, name: str) -> FileResponse:
+        return _shot_response(registry.get(run_id), name)
+
     @api.post("/{run_id}/answer")
     def run_answer(run_id: str, body: AnswerBody) -> dict:
         registry.get(run_id).answer(body.question_id, body.answer)
@@ -325,6 +348,10 @@ def create_app(state: EngineState | None = None, *, registry: Registry | None = 
     @app.get("/stream")
     async def stream(request: Request) -> EventSourceResponse:
         return _stream_response(registry.current_state(), request)
+
+    @app.get("/shots/{name}")
+    def shot(name: str) -> FileResponse:
+        return _shot_response(registry.current_state(), name)
 
     @app.post("/answer")
     def post_answer(body: AnswerBody) -> dict:

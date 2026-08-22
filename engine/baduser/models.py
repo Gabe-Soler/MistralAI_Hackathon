@@ -233,6 +233,8 @@ class SessionConfig(BaseModel):
     support_phone: str | None = None
     replay: str | None = None
     ci: bool = False
+    headless: bool = True  # the web channel still captures screenshots headless;
+                           # only the visible window goes away.
     rps: float = 5.0  # per-target rate cap. Parallel plays would otherwise load-test the
                       # app and look like an attack from your IP (PLAN 15).
 

@@ -74,7 +74,9 @@ class WebAdapter:
         *,
         agent_factory=None,   # (task, sensitive_data) -> agent with `async run()`; tests inject
         model: str = "mistral-large-latest",
-        headless: bool = False,  # visible = demo-recordable (PLAN 13)
+        headless: bool = True,  # headless still renders and still screenshots -- only
+                                # the visible window goes away. --show-browser brings it
+                                # back when you want the browser itself on camera.
         max_steps: int = 12,
     ):
         self.target = (target or "").rstrip("/")

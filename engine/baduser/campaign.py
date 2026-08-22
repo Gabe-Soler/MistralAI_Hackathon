@@ -21,6 +21,7 @@ import json
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from . import discover, oracle
@@ -181,7 +182,8 @@ async def run_step(step: Step, ctx: Ctx, play_id: str) -> tuple[StepFinished, Re
         detail=ctx.redact(oracle.excerpt(result.raw)),  # around=None -> head window
         verdict=finding.verdict if finding else Verdict.benign,
         invariant_id=finding.invariant_id if finding else None,
-        shot=result.screenshot,
+        # Basename only: the route resolves it inside the run's shots dir.
+        shot=Path(result.screenshot).name if result.screenshot else None,
     )
     ctx.bus.emit(ev)
     if finding:

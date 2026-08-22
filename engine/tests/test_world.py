@@ -284,16 +284,36 @@ async def test_an_adapter_that_raises_is_a_failed_persona_not_a_crashed_run():
     assert any("socket gone" in e.detail for e in bus.events)
 
 
-async def test_artifact_failure_is_reported_but_not_fatal():
+async def test_creating_nothing_at_all_is_fatal():
+    """Signup returning 201 does not prove we are logged in -- an app can accept the
+    registration and still leave every later request anonymous. If not one artifact came
+    back with an id we have nothing for a cross-tenant read to reach, so the run would
+    probe an empty app and report a confident 0 breaches. Refuse instead."""
     m = synth_world(GT, "run-1")
 
     def signups_only(step):
         return created() if "register" in step.action else Result(status=404, raw="no such route")
 
     bus = Bus()
-    await seed(m, {Channel.api: FakeChannel(signups_only)}, bus, gt=GT)  # tenants are fine
-    assert any("could not create" in e.detail for e in bus.events)
-    assert all(a.ref == "" for a in m.artifacts)
+    with pytest.raises(SeedError, match="created nothing"):
+        await seed(m, {Channel.api: FakeChannel(signups_only)}, bus, gt=GT)
+    assert any("could not create" in e.detail for e in bus.events)  # still reported per-item
+
+
+async def test_a_flaky_create_route_still_seeds():
+    """Intermittent 500s must not sink the run: seeding retries across candidate paths, so
+    one working create route is enough to give the campaign a victim to reach for."""
+    m = synth_world(GT, "run-1")
+    n = {"i": 0}
+
+    def flaky(step):
+        if "register" in step.action:
+            return created()
+        n["i"] += 1
+        return created() if n["i"] % 2 else Result(status=500, raw="boom")
+
+    await seed(m, {Channel.api: FakeChannel(flaky)}, gt=GT)  # must not raise
+    assert any(a.ref for a in m.artifacts)
 
 
 async def test_seed_sends_the_canary_bearing_strings_to_the_target():

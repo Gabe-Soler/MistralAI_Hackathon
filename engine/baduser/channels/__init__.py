@@ -75,7 +75,8 @@ def build_adapters(
         from .web import WebAdapter  # guarded import; browser-use is optional
 
         out[Channel.web] = WebAdapter(
-            cfg.target, manifest, shots=shots_dir(cfg.run_id, runs_dir)
+            cfg.target, manifest, shots=shots_dir(cfg.run_id, runs_dir),
+            headless=getattr(cfg, "headless", True),
         )
     return out
 

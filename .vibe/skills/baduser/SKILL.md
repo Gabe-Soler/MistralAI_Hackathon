@@ -17,24 +17,22 @@ planted canary, not a guess.
 Without `--ci` the process **never exits** -- the server deliberately stays up so the
 dashboard stays live. Running that in the foreground blocks you forever.
 
-**Pick one. Both are a SINGLE bash call. Never poll across turns.**
+**Use this. It is a SINGLE bash call. Never poll across turns.**
 
-1. **Just want the result** (default choice):
-   ```bash
-   bad-user --target <URL> --repo <REPO_DIR> --channels api,chat --ci --no-open
-   ```
+```bash
+(bad-user --target <URL> --repo <REPO_DIR> --channels api,chat \
+   > /tmp/baduser.log 2>&1 &) ; \
+for _ in $(seq 150); do \
+  grep -qE "BREACH|NO STEP REACHED|seeding failed|created nothing|FAILED|Traceback" \
+    /tmp/baduser.log && break; sleep 2; done; \
+cat /tmp/baduser.log
+```
 
-2. **User wants the dashboard left live** -- background it and block on the log in the
-   same command, so it costs one turn:
-   ```bash
-   (bad-user --target <URL> --repo <REPO_DIR> --channels api,chat --no-open \
-      > /tmp/baduser.log 2>&1 &) ; \
-   for _ in $(seq 120); do \
-     grep -qE "BREACH|NO STEP REACHED|seeding failed|Traceback" /tmp/baduser.log \
-       && break; sleep 2; done; \
-   cat /tmp/baduser.log
-   ```
-   The dashboard then stays on `http://127.0.0.1:8787`.
+This opens the dashboard in the user's browser and leaves it live, while the loop waits
+for the run to finish so you can report the result in the same turn.
+
+**Only** add `--ci --no-open` if the user explicitly says they do not want the dashboard,
+or you are in a script that must exit non-zero on a breach.
 
 ## Flags
 
@@ -52,6 +50,9 @@ dashboard stays live. Running that in the foreground blocks you forever.
 
 ## What to do when asked to run it
 
+0. **Do not start a second copy of the app.** If one is already running, use its
+   port. Check first: `curl -s -o /dev/null -w '%{http_code}' <URL>/openapi.json`.
+   Only start it yourself if nothing responds.
 1. **Make sure the app is actually running** and you know its URL and port. If you just
    built it, start it first (backgrounded) and confirm it responds before attacking it.
 2. **Pass `--repo`** pointing at the app's source when you know it. That is what lets

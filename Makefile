@@ -5,7 +5,7 @@
 #
 # Everything runs offline, no API keys.
 
-.PHONY: setup install install-cli install-skill test lint target mock demo live eval check
+.PHONY: setup install install-cli install-skill test lint target mock demo live eval check clean clean-all status
 
 UV := cd engine && uv run --extra dev
 
@@ -63,5 +63,20 @@ demo:
 # BUG-* is detected and every OK-* is not. Non-zero on any mismatch.
 eval:
 	$(UV) python ../evals/run_eval.py
+
+# What is running right now -- run this first when a dashboard looks stale. A dashboard
+# belongs to ONE run; a new run starts its own server on the next free port, so an old
+# browser tab will never show new data.
+status:
+	@./scripts/baduser-status.sh
+
+# Stop engine runs and clear run artifacts + target databases.
+clean:
+	@./scripts/baduser-clean.sh
+
+# Also stop target apps this project started (uvicorn app:app). Restart them afterwards --
+# they create their schema at startup, so a dropped database needs a fresh boot.
+clean-all:
+	@./scripts/baduser-clean.sh --all
 
 check: lint test eval
