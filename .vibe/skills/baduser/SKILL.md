@@ -30,7 +30,7 @@ dashboard stays live. Running that in the foreground blocks you forever.
    (bad-user --target <URL> --repo <REPO_DIR> --channels api,chat --no-open \
       > /tmp/baduser.log 2>&1 &) ; \
    for _ in $(seq 120); do \
-     grep -qE "BREACH|NO STEP REACHED|seeding failed|Traceback" /tmp/baduser.log \
+     grep -qE "BREACH|NO STEP REACHED|seeding failed|FAILED|Traceback|Error" /tmp/baduser.log \
        && break; sleep 2; done; \
    cat /tmp/baduser.log
    ```
@@ -52,6 +52,9 @@ dashboard stays live. Running that in the foreground blocks you forever.
 
 ## What to do when asked to run it
 
+0. **Do not start a second copy of the app.** If one is already running, use its
+   port. Check first: `curl -s -o /dev/null -w '%{http_code}' <URL>/openapi.json`.
+   Only start it yourself if nothing responds.
 1. **Make sure the app is actually running** and you know its URL and port. If you just
    built it, start it first (backgrounded) and confirm it responds before attacking it.
 2. **Pass `--repo`** pointing at the app's source when you know it. That is what lets

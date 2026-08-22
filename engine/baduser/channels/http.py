@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from ..models import Manifest, Persona, Result, Step
+from ..models import Channel, Manifest, Persona, Result, Step
 from . import cap
 
 _METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
@@ -117,10 +117,23 @@ class _HttpBase:
             c.headers["Authorization"] = f"Bearer {persona.credentials.token.get_secret_value()}"
         return c
 
-    async def _send(self, step: Step, method: str, path: str, body: Any) -> Result:
+    async def _send(self, step: Step, method: str, path: str, body: Any,
+                    *, form: bool = False) -> Result:
         client = self.client_for(step.persona_id)
-        r = await client.request(method, path or "/", json=body)
+        kw = {"data": body} if form else {"json": body}
+        r = await client.request(method, path or "/", **kw)
         return Result(status=r.status_code, raw=cap(r.text), extracted=_scalars(r.text))
+
+    async def post_form(self, persona_id: str, path: str, data: dict) -> Result:
+        """Form-encoded POST. FastAPI's OAuth2PasswordRequestForm -- the standard login
+        dependency -- reads form data, not JSON, and 422s on a JSON body."""
+        step = Step(id="form", persona_id=persona_id, channel=Channel.api, action=path)
+        try:
+            filled = {k: fill_credentials(v, self.manifest.persona(persona_id))
+                      for k, v in data.items()}
+            return await self._send(step, "POST", path, filled, form=True)
+        except Exception as e:  # noqa: BLE001 - see ApiAdapter.act
+            return Result(error=repr(e))
 
     async def aclose(self) -> None:
         for c in self._clients.values():

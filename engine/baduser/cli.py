@@ -250,15 +250,19 @@ async def _run(
     speed: float = 1.0,
     open_browser: bool = False,
 ) -> int:
-    # Fail readably. Without this, a second run dies in a uvicorn traceback and the only
-    # symptom the user sees is "the dashboard doesn't open".
+    # A busy port is not a failure -- just take the next one. Erroring out meant a
+    # leftover dashboard from an earlier run blocked every subsequent run, and an agent
+    # driving this saw a message none of its success/failure patterns matched, so it sat
+    # waiting on a process that had already exited.
     if not _port_free(host, port):
-        typer.secho(
-            f"  port {port} is already in use -- another run is probably still going.\n"
-            f"  stop it, or use --port {port + 1}",
-            fg="red",
-        )
-        return 2
+        for candidate in range(port + 1, port + 21):
+            if _port_free(host, candidate):
+                typer.secho(f"  port {port} busy -- using {candidate}", fg="yellow")
+                port = candidate
+                break
+        else:
+            typer.secho(f"  no free port in {port}-{port + 20}. FAILED, nothing ran.", fg="red")
+            return 2
 
     config = uvicorn.Config(create_app(state), host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)

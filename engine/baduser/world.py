@@ -56,6 +56,11 @@ _CONTROLS_PER_TENANT = 2  # never used by a play; the compound-chain control run
 _ARTIFACTS_PER_PERSONA = 2
 
 _SIGNUP_PATHS = ["/api/register", "/api/signup", "/api/auth/register", "/register", "/signup"]
+_LOGIN_PATHS = ["/api/login", "/api/auth/login", "/login", "/api/token", "/api/sessions",
+                "/auth/login"]
+# What apps call the thing they hand back. Checked in order.
+_TOKEN_KEYS = ("access_token", "token", "accessToken", "jwt", "id_token", "session",
+               "sessionToken", "api_key")
 _ARTIFACT_PATHS = ["/api/documents", "/api/items", "/api/invoices", "/documents", "/items"]
 
 
@@ -123,7 +128,12 @@ def synth_world(gt: GroundTruth, run_id: str, n_tenants: int = 2) -> Manifest:
         m.canaries[canary] = tid
         m.canaries[canary.lower()] = tid
 
-        domain = f"{_slug(fake.last_name())}-{canary.lower()}.test"
+        # `.test` is an IANA special-use TLD and `email-validator` rejects it outright,
+        # so any app using Pydantic EmailStr -- i.e. most FastAPI apps -- 422s on every
+        # signup and seeding fails with "could not seed 2 tenants". A subdomain of
+        # example.com is reserved (never deliverable, so we cannot mail a real person)
+        # and passes validation, while still carrying the tenant's canary.
+        domain = f"{_slug(fake.last_name())}-{canary.lower()}.example.com"
         n_people = _PERSONAS_PER_TENANT + _CONTROLS_PER_TENANT
         for j in range(n_people):
             control = j >= _PERSONAS_PER_TENANT
@@ -269,6 +279,75 @@ def _artifact_candidates(gt: GroundTruth, kind: str) -> list[str]:
     return list(dict.fromkeys([*found, plural, *_ARTIFACT_PATHS]))
 
 
+def _token_of(raw: str) -> str:
+    """Pull an auth token out of a signup or login response, whatever it is called."""
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    for scope in (data, data.get("data"), data.get("user"), data.get("session")):
+        if not isinstance(scope, dict):
+            continue
+        for key in _TOKEN_KEYS:
+            v = scope.get(key)
+            if isinstance(v, str) and v:
+                return v
+    return ""
+
+
+def _login_payload() -> dict[str, str]:
+    """Superset body -- we do not know whether this app wants email or username."""
+    return {
+        "email": "{{email}}",
+        "username": "{{username}}",
+        "login": "{{email}}",
+        "password": "{{secret}}",
+    }
+
+
+async def _login(persona, gt, adapters, state) -> bool:
+    """Exchange credentials for a token.
+
+    Signing up is not the same as being signed in. Apps that hand back a session at
+    registration are the minority; most (and most generated ones) separate the two. Without
+    this every request after seeding is anonymous, every response is "Not authenticated",
+    and the oracle scores all of it benign -- a clean board on an app we never logged into.
+    """
+    api = adapters.get(Channel.api)
+    if api is None:
+        return False
+    if state.get("login_path"):
+        paths = [state["login_path"]]
+    else:
+        discovered = [p for p in (parse_hint(e, "")[1] for e in gt.endpoints)
+                      if (p and "login" in p.lower()) or (p and "token" in p.lower())]
+        paths = list(dict.fromkeys([*discovered, *_LOGIN_PATHS]))
+    body = json.dumps(_login_payload())
+    for path in paths:
+        step = Step(id=f"seed-login-{persona.id}", persona_id=persona.id,
+                    channel=Channel.api, action=f"POST {path} {body}")
+        r = await api.act(step)
+        if not _ok(r) and getattr(api, "post_form", None) is not None:
+            # OAuth2PasswordRequestForm (the standard FastAPI login dependency) reads FORM
+            # data and 422s on JSON. Very common, so always try the form shape too.
+            r = await api.post_form(persona.id, path,
+                                    {"username": "{{email}}", "password": "{{secret}}"})
+            if not _ok(r):
+                r = await api.post_form(persona.id, path,
+                                        {"username": "{{username}}", "password": "{{secret}}"})
+        if not _ok(r):
+            continue
+        token = _token_of(r.raw)
+        if token:
+            persona.credentials.token = SecretStr(token)
+        state["login_path"] = path
+        _confirm(state, "POST", path)
+        return True
+    return False
+
+
 def _ref_of(raw: str) -> str:
     """Pull the created object's id out of the response, if it said one."""
     try:
@@ -310,9 +389,17 @@ async def _signup(persona, tenant, gt, adapters, state) -> bool:
         for path in paths:
             step = Step(id=f"seed-signup-{persona.id}", persona_id=persona.id,
                         channel=Channel.api, action=f"{method} {path} {body}")
-            if _ok(await api.act(step)):
+            r = await api.act(step)
+            if _ok(r):
                 state["signup_path"], state["signup_method"] = path, method
                 _confirm(state, method, path)
+                # Some apps hand back a session at signup; most do not. Take it if it is
+                # there, otherwise go and log in properly.
+                token = _token_of(r.raw)
+                if token:
+                    persona.credentials.token = SecretStr(token)
+                else:
+                    await _login(persona, gt, adapters, state)
                 return True
     return False
 
@@ -436,6 +523,20 @@ async def seed(manifest: Manifest, adapters, bus=None, store=None, *, gt=None) -
         _save(store, manifest)
 
     manifest.routes = list(state.get("routes", []))  # hand the proven routes to the campaign
+
+    # Creating an artifact is the proof that we are actually authenticated. Signup can
+    # return 201 while login silently fails, and then every later request is anonymous:
+    # each one comes back "Not authenticated", the oracle scores it benign, and the run
+    # reports 0 breaches on an app it never logged into. Public routes returning 200 mean
+    # the "did anything land" check cannot catch this -- so check it here.
+    if not any(a.ref for a in manifest.artifacts):
+        raise SeedError(
+            "signed up, but created nothing: no artifact came back with an id. Either we "
+            "are not actually authenticated (signup can return 201 while login silently "
+            "fails) or no create route was found. Either way there is nothing for a "
+            "cross-tenant read to reach, so a run would probe an empty app, score every "
+            "response benign, and report a false clean."
+        )
 
     if len(seeded) < 2:
         raise SeedError(
