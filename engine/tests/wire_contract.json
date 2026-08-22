@@ -1,0 +1,517 @@
+{
+  "$defs": {
+    "ChainEvent": {
+      "properties": {
+        "compound": {
+          "title": "Compound",
+          "type": "boolean"
+        },
+        "control_verdict": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Verdict"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "play_id": {
+          "title": "Play Id",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/StepFinished"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "type": {
+          "const": "chain",
+          "default": "chain",
+          "title": "Type",
+          "type": "string"
+        },
+        "verdict": {
+          "$ref": "#/$defs/Verdict"
+        }
+      },
+      "required": [
+        "play_id",
+        "title",
+        "steps",
+        "verdict",
+        "compound"
+      ],
+      "title": "ChainEvent",
+      "type": "object"
+    },
+    "Channel": {
+      "enum": [
+        "api",
+        "chat",
+        "web",
+        "voice"
+      ],
+      "title": "Channel",
+      "type": "string"
+    },
+    "Finding": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "channel": {
+          "$ref": "#/$defs/Channel"
+        },
+        "cite": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cite"
+        },
+        "evidence": {
+          "default": "",
+          "title": "Evidence",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "invariant_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invariant Id"
+        },
+        "persona_id": {
+          "title": "Persona Id",
+          "type": "string"
+        },
+        "play_id": {
+          "title": "Play Id",
+          "type": "string"
+        },
+        "repro": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "title": "Repro",
+          "type": "array"
+        },
+        "verdict": {
+          "$ref": "#/$defs/Verdict"
+        }
+      },
+      "required": [
+        "id",
+        "play_id",
+        "persona_id",
+        "channel",
+        "action",
+        "verdict"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "FindingEvent": {
+      "properties": {
+        "finding": {
+          "$ref": "#/$defs/Finding"
+        },
+        "type": {
+          "const": "finding",
+          "default": "finding",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding"
+      ],
+      "title": "FindingEvent",
+      "type": "object"
+    },
+    "Invariant": {
+      "properties": {
+        "cite": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cite"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "code",
+            "dev"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "rule",
+        "source"
+      ],
+      "title": "Invariant",
+      "type": "object"
+    },
+    "PhaseEvent": {
+      "properties": {
+        "detail": {
+          "default": "",
+          "title": "Detail",
+          "type": "string"
+        },
+        "phase": {
+          "title": "Phase",
+          "type": "string"
+        },
+        "type": {
+          "const": "phase",
+          "default": "phase",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "phase"
+      ],
+      "title": "PhaseEvent",
+      "type": "object"
+    },
+    "QuestionEvent": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "options": {
+          "default": [
+            "y",
+            "n"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "question",
+          "default": "question",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "QuestionEvent",
+      "type": "object"
+    },
+    "SeedEvent": {
+      "properties": {
+        "artifact_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Id"
+        },
+        "detail": {
+          "default": "",
+          "title": "Detail",
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "persona_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Persona Id"
+        },
+        "tenant_id": {
+          "title": "Tenant Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "seed",
+          "default": "seed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenant_id"
+      ],
+      "title": "SeedEvent",
+      "type": "object"
+    },
+    "Step": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "channel": {
+          "$ref": "#/$defs/Channel"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "persona_id": {
+          "title": "Persona Id",
+          "type": "string"
+        },
+        "target_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Ref"
+        }
+      },
+      "required": [
+        "id",
+        "persona_id",
+        "channel",
+        "action"
+      ],
+      "title": "Step",
+      "type": "object"
+    },
+    "StepFinished": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "channel": {
+          "$ref": "#/$defs/Channel"
+        },
+        "detail": {
+          "default": "",
+          "title": "Detail",
+          "type": "string"
+        },
+        "invariant_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invariant Id"
+        },
+        "persona_id": {
+          "title": "Persona Id",
+          "type": "string"
+        },
+        "play_id": {
+          "title": "Play Id",
+          "type": "string"
+        },
+        "shot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shot"
+        },
+        "type": {
+          "const": "step_finished",
+          "default": "step_finished",
+          "title": "Type",
+          "type": "string"
+        },
+        "verdict": {
+          "$ref": "#/$defs/Verdict"
+        }
+      },
+      "required": [
+        "play_id",
+        "persona_id",
+        "channel",
+        "action",
+        "verdict"
+      ],
+      "title": "StepFinished",
+      "type": "object"
+    },
+    "StepStarted": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "channel": {
+          "$ref": "#/$defs/Channel"
+        },
+        "persona_id": {
+          "title": "Persona Id",
+          "type": "string"
+        },
+        "play_id": {
+          "title": "Play Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "step_started",
+          "default": "step_started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "play_id",
+        "persona_id",
+        "channel",
+        "action"
+      ],
+      "title": "StepStarted",
+      "type": "object"
+    },
+    "TruthUpdated": {
+      "properties": {
+        "invariant": {
+          "$ref": "#/$defs/Invariant"
+        },
+        "type": {
+          "const": "truth_updated",
+          "default": "truth_updated",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "invariant"
+      ],
+      "title": "TruthUpdated",
+      "type": "object"
+    },
+    "Verdict": {
+      "enum": [
+        "benign",
+        "breach",
+        "error"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "chain": "#/$defs/ChainEvent",
+      "finding": "#/$defs/FindingEvent",
+      "phase": "#/$defs/PhaseEvent",
+      "question": "#/$defs/QuestionEvent",
+      "seed": "#/$defs/SeedEvent",
+      "step_finished": "#/$defs/StepFinished",
+      "step_started": "#/$defs/StepStarted",
+      "truth_updated": "#/$defs/TruthUpdated"
+    },
+    "propertyName": "type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/QuestionEvent"
+    },
+    {
+      "$ref": "#/$defs/SeedEvent"
+    },
+    {
+      "$ref": "#/$defs/TruthUpdated"
+    },
+    {
+      "$ref": "#/$defs/PhaseEvent"
+    },
+    {
+      "$ref": "#/$defs/StepStarted"
+    },
+    {
+      "$ref": "#/$defs/StepFinished"
+    },
+    {
+      "$ref": "#/$defs/FindingEvent"
+    },
+    {
+      "$ref": "#/$defs/ChainEvent"
+    }
+  ]
+}
