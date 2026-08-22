@@ -23,6 +23,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from . import discover, oracle
 from .models import (
@@ -72,6 +73,10 @@ class Ctx:
     redact: Callable[[str], str] = _identity
     throttle: Callable[[], Awaitable[None]] = None  # type: ignore[assignment]
     control_persona: Callable[[Step], str] = None   # type: ignore[assignment]
+    # Optional second opinion for steps the canary scan cleared. None = canary only, which
+    # is what every existing test and every run without an LLM gets.
+    llm: Any = None
+    plays: list[Play] | None = None  # generated plays, appended to the authored chains
 
 
 class Throttle:
@@ -174,6 +179,10 @@ async def run_step(step: Step, ctx: Ctx, play_id: str) -> tuple[StepFinished, Re
 
     ctx.reached.append(200 <= (result.status or 0) < 300)
     finding = oracle.check(ctx.gt, ctx.manifest, step, result, play_id, ctx.redact)
+    if finding is None and ctx.llm is not None:
+        # Only what the canary scan could not see. A judgement is `suspected`, never
+        # `breach`: one is a lookup against data we planted, the other is inference.
+        finding = await _judge(ctx, step, result, play_id)
     ev = StepFinished(
         play_id=play_id,
         persona_id=step.persona_id,
@@ -190,6 +199,30 @@ async def run_step(step: Step, ctx: Ctx, play_id: str) -> tuple[StepFinished, Re
         ctx.findings.append(finding)
         ctx.bus.emit(FindingEvent(finding=finding))  # the should-vs-did panel is pushed
     return ev, result
+
+
+async def _judge(ctx: Ctx, step: Step, result: Result, play_id: str) -> Finding | None:
+    from .judge import judge_step
+
+    actor = ctx.manifest.persona(step.persona_id)
+    verdict = await judge_step(ctx.llm, ctx.gt, step, result,
+                               actor.tenant_id if actor else None)
+    if verdict is None:
+        return None
+    inv_id, rationale = verdict
+    inv = next((i for i in ctx.gt.invariants if i.id == inv_id), None)
+    return Finding(
+        id=str(uuid4())[:8],
+        play_id=play_id,
+        persona_id=step.persona_id,
+        channel=step.channel,
+        action=step.action,
+        verdict=Verdict.suspected,
+        invariant_id=inv_id,
+        cite=inv.cite if inv else None,
+        evidence=ctx.redact(oracle.excerpt(result.raw)),
+        rationale=rationale,
+    )
 
 
 async def run_play(play: Play, ctx: Ctx) -> ChainEvent | None:
@@ -247,6 +280,7 @@ def assert_disjoint_personas(plays: list[Play]) -> None:
 
 async def run(cfg: SessionConfig, ctx: Ctx) -> list[Finding]:
     plays = hero_chains(ctx.gt, ctx.manifest)   # authored -- PLAN 15 "Authoring plays"
+    plays += ctx.plays or []                    # generated -- planner.plan
     assert_disjoint_personas(plays)
     await asyncio.gather(*(run_play(p, ctx) for p in plays))   # only PLAYS fan out
     return ctx.findings

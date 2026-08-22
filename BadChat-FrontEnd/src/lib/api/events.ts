@@ -26,8 +26,13 @@ export type Channel = "api" | "chat" | "web" | "voice";
  * `error` means the step itself failed -- an adapter crash or a dead target -- and the
  * engine is deliberate that it must never read as a pass. It is not a finding about the
  * product either: `--ci` and the CLI summary both count only `breach`.
+ *
+ * `suspected` is an LLM judgement against a stated invariant, for the bug classes a canary
+ * scan is blind to. It is NOT the same claim as `breach`: one is a lookup against data the
+ * tool planted, the other is inference and can be wrong. Render it as a weaker claim and
+ * never fold it into the breach count.
  */
-export type Verdict = "benign" | "breach" | "error";
+export type Verdict = "benign" | "breach" | "error" | "suspected";
 
 /** A rule the app is supposed to enforce. `cite` is `file:line` in the target's source. */
 export interface Invariant {
@@ -58,6 +63,8 @@ export interface Finding {
   cite: string | null;
   /** Redacted excerpt of what came back. The evidence, and what the copy button yields. */
   evidence: string;
+  /** Why the judge thinks a rule was broken. Empty on canary breaches. */
+  rationale: string;
   /** Declared by the engine but never populated -- always `[]`. Do not build UI for it. */
   repro: Step[];
 }

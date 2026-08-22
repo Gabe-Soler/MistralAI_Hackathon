@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils'
 import { HeroStaircase } from '@/components/HeroStaircase'
 import { PixelBackdrop } from '@/components/PixelBackdrop'
 import { FIRST_STEP_SURFACE } from '@/components/heroGrid'
@@ -13,7 +14,16 @@ const CAT_WIDTH = '11%'
  */
 const CAT_TRAVEL = 'translateX(calc(var(--cat-run, 0) * (100cqw + 100%) - 100%))'
 
-export function Hero() {
+export interface HeroProps {
+  /**
+   * What moves the cat. `scroll` reads the --cat-run useSceneScroll publishes, which
+   * only means anything while the hero is pinned; `loop` walks it on a CSS clock, for
+   * pages that show the hero without a scene to scroll through (see RunPage).
+   */
+  catMotion?: 'scroll' | 'loop'
+}
+
+export function Hero({ catMotion = 'scroll' }: HeroProps = {}) {
   return (
     <section className="relative flex min-h-svh flex-col overflow-hidden bg-[var(--hero-bg)]">
       {/* The sunset the rest of the hero stands in front of. It reacts to the
@@ -39,7 +49,7 @@ export function Hero() {
         {/* Runs the plateau — the same surface the cat used to sit on. It
             passes behind the taller steps at either end, clear of the text. */}
         <div
-          className="absolute will-change-transform"
+          className={cn('absolute will-change-transform', catMotion === 'loop' && 'cat-loop')}
           style={{
             width: CAT_WIDTH,
             aspectRatio: catAspect(WALKING_CAT),

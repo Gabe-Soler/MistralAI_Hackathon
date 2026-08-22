@@ -1,6 +1,6 @@
 import { HERO_PALETTE } from '@/hooks/useScrollPalette'
 
-export type QaSeverity = 'critical' | 'major' | 'minor'
+export type QaSeverity = 'critical' | 'major' | 'minor' | 'suspected'
 
 export interface QaIssue {
   id: string
@@ -15,6 +15,10 @@ export interface QaIssue {
 
 /** Severity swatches, taken from the brand ramp the staircase animates through. */
 export const SEVERITY_COLOR: Record<QaSeverity, string> = {
+  // Muted, and off the hero ramp on purpose: a judged finding is a weaker claim than a
+  // proven one, and colouring it like a breach would erase the distinction the engine
+  // works hard to keep.
+  suspected: 'var(--muted-foreground)',
   critical: HERO_PALETTE[0],
   major: HERO_PALETTE[2],
   minor: HERO_PALETTE[4],

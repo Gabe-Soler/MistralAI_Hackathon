@@ -20,9 +20,14 @@ import type { RunView } from "./reducer";
  * that is the card's entire purpose; it would render as a card asserting a severity
  * nobody measured. Errors surface in the transcript and the run-health line instead.
  */
-export const isReportable = (f: Finding): boolean => f.verdict === "breach";
+export const isReportable = (f: Finding): boolean =>
+  f.verdict === "breach" || f.verdict === "suspected";
 
 function severityOf(f: Finding, compoundPlays: Set<string>): QaSeverity {
+  // Judged, not proven. Its own tier, below every proven one, however confident the
+  // model sounded -- `breach` means we planted the data and found it where it could not
+  // legally be, and nothing inferred earns that rung.
+  if (f.verdict === "suspected") return "suspected";
   if (compoundPlays.has(f.play_id)) return "critical";
   return f.invariant_id ? "major" : "minor";
 }
@@ -55,6 +60,7 @@ export function toIssues(view: RunView): QaIssue[] {
       error: [
         rule ? `Expected: ${rule.rule}` : null,
         f.cite ? `Defined at: ${f.cite}` : null,
+        f.rationale ? `Judged: ${f.rationale}` : null,
         "",
         f.evidence || "(no response body captured)",
       ]
@@ -149,7 +155,9 @@ export function runHealth(view: RunView): { ok: boolean; text: string } {
     0,
   );
   const tenants = new Set(view.seeds.map((s) => s.tenant_id)).size;
+  const suspected = view.findings.filter((f) => f.verdict === "suspected").length;
   const parts = [`${steps} step${steps === 1 ? "" : "s"}`];
+  if (suspected) parts.push(`${suspected} suspected`);
   if (errored) parts.push(`${errored} errored`);
   if (tenants) parts.push(`${tenants} tenants seeded`);
   return { ok: errored === 0, text: parts.join(" · ") };

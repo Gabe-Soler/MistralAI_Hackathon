@@ -30,6 +30,12 @@ class Verdict(str, Enum):
     benign = "benign"
     breach = "breach"
     error = "error"
+    # Judged by an LLM against an invariant, not proven by a canary. Deliberately a
+    # separate rung: `breach` means we planted the data and found it where it could not
+    # legally be -- a lookup. `suspected` is inference and can be wrong, so it must never
+    # be counted, coloured or CI-gated as if it were the same thing (PLAN 15: a
+    # hallucinated invariant produces a FALSE BREACH against correct code).
+    suspected = "suspected"
 
 
 # ---------- Ground truth (the rules) ----------
@@ -219,6 +225,9 @@ class Finding(BaseModel):
     invariant_id: str | None = None
     cite: str | None = None
     evidence: str = ""
+    # Why the judge thinks the rule was broken. Empty for canary breaches, where the
+    # evidence speaks for itself.
+    rationale: str = ""
     repro: list[Step] = []
 
 

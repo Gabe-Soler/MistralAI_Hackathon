@@ -185,6 +185,24 @@ body {
   cursor: none !important;
 }
 
+/* The cat's crossing, from off one edge of the staircase to off the other.
+   On the landing page --cat-run is scroll position (see useSceneScroll); a run
+   page has no scene to scroll through, so the cat walks on its own clock there
+   instead. Registering the property is what makes it interpolable -- an
+   unregistered custom property would cut from 0 to 1 with nothing between. */
+@property --cat-run {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes cat-run-loop {
+  from { --cat-run: 0; }
+  to   { --cat-run: 1; }
+}
+
+.cat-loop { animation: cat-run-loop 14s linear infinite; }
+
 /* Live items animate on mount rather than on scroll -- see lib/reveal.ts. */
 @keyframes reveal-in {
   from { opacity: 0; transform: translateY(0.75rem); }
@@ -216,6 +234,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .shimmer { animation: none; background: none; color: var(--foreground); }
+  .cat-loop { animation: none; --cat-run: 0.5; }
   [style*="reveal-in"] { animation: none !important; }
 }
 

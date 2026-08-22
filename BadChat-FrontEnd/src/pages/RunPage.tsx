@@ -1,5 +1,6 @@
 import { CatCursor } from "@/components/CatCursor";
 import { CatFigure } from "@/components/CatFigure";
+import { Hero } from "@/components/Hero";
 import { HeroStaircase } from "@/components/HeroStaircase";
 import { QaResults } from "@/components/QaResults";
 import { ThinkingTranscript } from "@/components/ThinkingTranscript";
@@ -15,8 +16,11 @@ import { runHealth, toIssues, toThinkingSteps } from "@/lib/run/adapters";
  * items animate on mount instead (mode="live"), and the page takes its natural height
  * rather than the fixed SCENE_SCROLL viewports, because the transcript grows.
  *
- * No pinned hero either: the cat's run is a title sequence, and a run already in flight
- * should not make you scroll past one to see it.
+ * The hero opens the page as it does the landing page, but unpinned: it scrolls away
+ * under one flick rather than holding the viewport for the length of the cat's run, so a
+ * run already in flight is a scroll away rather than a title sequence away. With no
+ * pinned scene, scroll position says nothing about where the cat should be, so it walks
+ * on its own clock instead (catMotion="loop").
  */
 export function RunPage({ runId }: { runId: string }) {
   const view = useRun(runId);
@@ -28,6 +32,10 @@ export function RunPage({ runId }: { runId: string }) {
     <>
       <CatCursor />
 
+      <Hero catMotion="loop" />
+
+      {/* Opens on the hero staircase's reflection, flush with the hero's own bottom
+          edge -- the same fold the landing page turns on. */}
       <section className="flex min-h-svh flex-col bg-[var(--hero-bg)]">
         <HeroStaircase half="bottom" />
 

@@ -214,6 +214,19 @@ async def pipeline(state: EngineState) -> None:
     state.phase = "attacking"
     bus.emit(PhaseEvent(phase="attacking"))
     ctx = build_ctx(gt, manifest, bus, adapters, min_interval=1.0 / max(cfg.rps, 0.1))
+
+    # With an LLM the run widens beyond the canary scan: generated plays probe the other
+    # invariants the repo read found, and a judge grades whatever the canary scan cleared.
+    # Both produce `suspected`, never `breach` -- inference is reported separately from the
+    # lookup, and only the lookup gates --ci.
+    if llm is not None:
+        ctx.llm = llm
+        from .planner import plan as plan_plays
+
+        ctx.plays = await plan_plays(llm, gt, manifest, cfg.channels)
+        if ctx.plays:
+            typer.echo(f"  planned {len(ctx.plays)} extra probes from "
+                       f"{len(gt.invariants)} rules")
     try:
         findings = await campaign_run(cfg, ctx)
     finally:
@@ -241,6 +254,12 @@ async def pipeline(state: EngineState) -> None:
     breaches = sum(1 for f in state.findings if f.verdict == Verdict.breach)
     typer.secho(f"  {breaches} BREACH" + ("" if breaches == 1 else "ES"),
                 fg="red" if breaches else "green")
+    suspected = sum(1 for f in state.findings if f.verdict == Verdict.suspected)
+    if suspected:
+        # Deliberately a separate line and a different colour: these are judged, not
+        # proven, and must never be read as part of the breach count.
+        typer.secho(f"  {suspected} suspected (judged against the rules, not proven)",
+                    fg="yellow")
 
     state.phase = "done"
     bus.emit(PhaseEvent(phase="done"))
