@@ -219,7 +219,7 @@ async def pipeline(state: EngineState) -> None:
     # different question from "does anything leak" and the one a human notices first. An
     # app can pass every leak check while being completely unusable.
     if Channel.web in cfg.channels and adapters.get(Channel.web) is not None:
-        from .uiflows import run_flows
+        from .uiflows import FLOWS, UiUnavailable, run_flows
 
         def _ui_emit(flow: object, state: str, reason: str,
                      shot: str | None = None) -> None:
@@ -234,11 +234,24 @@ async def pipeline(state: EngineState) -> None:
                 invariant_id=flow.id, shot=shot))
 
         typer.echo("  checking the UI flows...")
-        ui = await run_flows(adapters[Channel.web], manifest, cfg.target, emit=_ui_emit)
+        try:
+            ui = await run_flows(adapters[Channel.web], manifest, cfg.target, emit=_ui_emit)
+        except UiUnavailable as e:
+            # Never a finding about the target. The UI was not tested at all, and saying
+            # so is the only honest report -- five BROKEN flows against an app whose pages
+            # were never opened would be worse than no check.
+            ui = []
+            typer.secho(f"  UI flows NOT CHECKED -- the browser could not start: {e}",
+                        fg="red")
+            typer.secho("  install the browser extra:  "
+                        "uv tool install --force '<repo>/engine[web]'", fg="red")
+        else:
+            for f in ui:
+                typer.secho(f"  BROKEN: {f.action} -- {f.rationale}", fg="yellow")
+            n = len(FLOWS)
+            typer.secho(f"  UI flows: {n - len(ui)}/{n} passed",
+                        fg="green" if not ui else "yellow")
         state.findings.extend(ui)
-        for f in ui:
-            typer.secho(f"  BROKEN: {f.action} -- {f.rationale}", fg="yellow")
-        typer.secho(f"  UI flows: {5 - len(ui)}/5 passed", fg="green" if not ui else "yellow")
 
     ctx = build_ctx(gt, manifest, bus, adapters, min_interval=1.0 / max(cfg.rps, 0.1))
 

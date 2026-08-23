@@ -18,7 +18,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.5"]
-web = ["browser-use>=0.1.40"]
+# pydantic-settings is browser-use's own import (browser_use/config.py) but is not always
+# pulled in by its dependency metadata -- installing the extra alone gave a working
+# `find_spec` and a ModuleNotFoundError on first real use. Pinned here so the extra
+# actually works rather than merely resolving.
+web = ["browser-use>=0.1.40", "pydantic-settings>=2.0"]
 
 [project.scripts]
 bad-user = "baduser.cli:app"

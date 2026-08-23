@@ -48,6 +48,16 @@ A page that errors, a control that does nothing, a form that will not submit, or
 that never appears is a FAIL."""
 
 
+class UiUnavailable(RuntimeError):
+    """The browser could not start at all, so no flow was actually tested.
+
+    Kept distinct from a broken flow because they are opposite claims. A broken flow says
+    THE APP failed a person trying to use it. This says WE could not look. Reporting the
+    second as the first is the false-clean failure in reverse: five BROKEN findings against
+    an app whose UI was never opened, because a dependency of ours was missing.
+    """
+
+
 @dataclass(frozen=True)
 class Flow:
     id: str
@@ -140,7 +150,12 @@ async def run_flows(
             result = None
             ok, reason = False, (f"the flow did not finish within {timeout:.0f}s -- the "
                                  "agent could not get through it")
-        except Exception as e:  # noqa: BLE001 - one broken flow must not end the suite
+        except ImportError as e:
+            # Our dependency, not their bug. Abort the suite rather than emit a finding.
+            raise UiUnavailable(str(e)) from e
+        except Exception as e:
+            if _is_missing_dependency(e):
+                raise UiUnavailable(str(e)) from e
             result = None
             reason, ok = f"the browser could not run this flow: {e!r}"[:200], False
         else:
@@ -168,6 +183,13 @@ async def run_flows(
             shot=shot,
         ))
     return out
+
+
+def _is_missing_dependency(e: BaseException) -> bool:
+    """browser-use imports several of its own dependencies lazily, so a missing one
+    surfaces mid-run as a plain exception rather than at construction."""
+    text = f"{type(e).__name__}: {e}"
+    return "No module named" in text or "ModuleNotFoundError" in text
 
 
 def _shot_name(result: Any) -> str | None:

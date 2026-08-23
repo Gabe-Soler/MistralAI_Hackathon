@@ -8,11 +8,19 @@ reported, including when the agent fails in an unhelpful way.
 
 from __future__ import annotations
 
+import pytest
 from pydantic import SecretStr
 
 from baduser.models import Channel, Credentials, Manifest, Persona, Result, Tenant, Verdict
 from baduser.prompts import SAFETY
-from baduser.uiflows import FLOWS, Flow, build_task, read_result, run_flows
+from baduser.uiflows import (
+    FLOWS,
+    Flow,
+    UiUnavailable,
+    build_task,
+    read_result,
+    run_flows,
+)
 
 
 def _manifest() -> Manifest:
@@ -158,3 +166,38 @@ async def test_the_signed_out_flow_runs_without_an_account() -> None:
                            Manifest(), "http://x", flows=flows)
 
     assert f.persona_id == "anonymous"
+
+
+async def test_a_missing_browser_dependency_is_not_the_app_s_fault() -> None:
+    """The false-clean failure in reverse. A run once reported five BROKEN flows -- a
+    verdict about the TARGET -- when the truth was that browser-use could not import and
+    no page was ever opened. 'We could not look' and 'the app failed a user' are opposite
+    claims, and only one of them is about the product."""
+    class NoBrowser:
+        async def act(self, step):
+            raise ModuleNotFoundError("No module named 'pydantic_settings'")
+
+    with pytest.raises(UiUnavailable):
+        await run_flows(NoBrowser(), _manifest(), "http://x")
+
+
+async def test_a_lazy_import_failure_is_caught_too() -> None:
+    """browser-use imports several of its own dependencies lazily, so the failure arrives
+    mid-run as a plain exception rather than at construction."""
+    class LazyBoom:
+        async def act(self, step):
+            raise RuntimeError("worker failed: No module named 'playwright'")
+
+    with pytest.raises(UiUnavailable):
+        await run_flows(LazyBoom(), _manifest(), "http://x")
+
+
+async def test_a_real_browser_crash_is_still_the_app_s_problem() -> None:
+    """Only a MISSING DEPENDENCY is ours. A browser that starts and then dies is a flow a
+    user could not complete, and must stay reportable."""
+    flows = (Flow("ui-create", "Create a record", "make one"),)
+
+    (f,) = await run_flows(FakeWeb(RuntimeError("chrome crashed")), _manifest(),
+                           "http://x", flows=flows)
+
+    assert f.verdict is Verdict.broken
