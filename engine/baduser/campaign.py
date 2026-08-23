@@ -262,6 +262,30 @@ async def run_play(play: Play, ctx: Ctx) -> ChainEvent | None:
     return chain
 
 
+def _without_collisions(authored: list[Play], generated: list[Play]) -> list[Play]:
+    """Drop generated plays that would share a persona with an authored one.
+
+    The authored chains own their personas: they are the deterministic path the demo
+    depends on, and hero_chains picks them from tenant B in a way no caller can predict
+    from outside. A generated play is additive, so when the two want the same actor the
+    generated one loses -- dropped, never silently reassigned to a persona whose tenant
+    would change what the probe means.
+
+    Without this the run dies at assert_disjoint_personas after seeding has already
+    written to the target: an internal error, mid-run, with nothing to show for it.
+    """
+    taken = {s.persona_id for p in authored for s in p.steps}
+    out: list[Play] = []
+    for play in generated:
+        pids = {s.persona_id for s in play.steps}
+        # "anonymous" is not a real account and cannot collide over auth state.
+        if any(pid in taken for pid in pids if pid != "anonymous"):
+            continue
+        taken |= pids - {"anonymous"}
+        out.append(play)
+    return out
+
+
 def assert_disjoint_personas(plays: list[Play]) -> None:
     """No two concurrent plays may share a persona -- enforce by scheduling, not locking.
 
@@ -280,7 +304,7 @@ def assert_disjoint_personas(plays: list[Play]) -> None:
 
 async def run(cfg: SessionConfig, ctx: Ctx) -> list[Finding]:
     plays = hero_chains(ctx.gt, ctx.manifest)   # authored -- PLAN 15 "Authoring plays"
-    plays += ctx.plays or []                    # generated -- planner.plan
+    plays += _without_collisions(plays, ctx.plays or [])  # generated -- planner.plan
     assert_disjoint_personas(plays)
     await asyncio.gather(*(run_play(p, ctx) for p in plays))   # only PLAYS fan out
     return ctx.findings

@@ -34,13 +34,27 @@ for the run to finish so you can report the result in the same turn.
 **Only** add `--ci --no-open` if the user explicitly says they do not want the dashboard,
 or you are in a script that must exit non-zero on a breach.
 
+## Testing the UI
+
+`--channels api,chat,web` adds five flow checks that answer a different question from
+everything else: not "did data leak" but "can a person actually use this". Sign up, log
+in, create a record, see it listed, and -- signed out -- be kept out. A failure is
+`BROKEN`, reported with the frame the flow died on.
+
+It needs the browser extra: `uv tool install --force '<repo>/engine[web]'`. Without it the
+web channel is silently absent.
+
+Budget 3-5 minutes, so raise the wait loop to `seq 300` when web is in the channels. Pair
+it with `--show-browser` when the user wants to watch.
+
 ## Flags
 
 | flag | meaning |
 |---|---|
 | `--target <url>` | the running app. **Required.** Non-loopback needs confirmation. |
 | `--repo <path>` | source dir to read for rules, via Mistral. **Pass this whenever you know where the app's source is** -- usually `.` when you just built it. Without it the run assumes only tenant isolation. |
-| `--channels api,chat` | which channels to use. |
+| `--channels api,chat` | which channels to use. Add `web` to also run the UI flow checks -- see below. |
+| `--show-browser` | show the browser instead of running it headless. Use it whenever the user wants to WATCH the UI being tested; headless captures the same screenshots but there is nothing on screen. |
 | `--ci` | exit non-zero on a breach and quit. |
 | `--no-open` | do not open a browser tab. |
 | `--rps 5` | cap requests/sec against the target. |

@@ -163,3 +163,57 @@ async def test_a_disabled_channel_is_not_used() -> None:
 
 async def test_no_llm_means_no_generated_plays() -> None:
     assert await plan(None, GT, _manifest(), [Channel.api]) == []
+
+
+# ---------- the merge with the authored chains ----------
+
+
+def test_a_generated_play_never_steals_an_authored_persona() -> None:
+    """The crash this exists to prevent: the planner guessed which personas hero_chains
+    would take by slicing the pool, hero_chains actually draws from tenant B, and the
+    disjointness assert killed the run AFTER seeding had already written to the target.
+    Guessing was the bug; the merge point knows rather than predicts."""
+    from baduser.campaign import _without_collisions
+    from baduser.models import Play
+
+    def play(pid: str, persona: str) -> Play:
+        return Play(id=pid, title=pid,
+                    steps=[Step(id="s1", persona_id=persona, channel=Channel.api,
+                                action="GET /api/invoices")])
+
+    authored = [play("r1", "t2-p1")]
+    generated = [play("gen-1", "t2-p1"), play("gen-2", "t2-p3")]
+
+    kept = _without_collisions(authored, generated)
+
+    assert [p.id for p in kept] == ["gen-2"]
+
+
+def test_two_generated_plays_do_not_collide_with_each_other() -> None:
+    from baduser.campaign import _without_collisions
+    from baduser.models import Play
+
+    def play(pid: str, persona: str) -> Play:
+        return Play(id=pid, title=pid,
+                    steps=[Step(id="s1", persona_id=persona, channel=Channel.api,
+                                action="GET /api/me")])
+
+    kept = _without_collisions([], [play("g1", "p9"), play("g2", "p9")])
+
+    assert [p.id for p in kept] == ["g1"]
+
+
+def test_anonymous_is_shared_freely_because_it_holds_no_session() -> None:
+    """Two plays acting with no credentials cannot corrupt each other's auth state, and
+    dropping one would silently lose the most useful probe there is."""
+    from baduser.campaign import _without_collisions
+    from baduser.models import Play
+
+    def play(pid: str) -> Play:
+        return Play(id=pid, title=pid,
+                    steps=[Step(id="s1", persona_id="anonymous", channel=Channel.api,
+                                action="GET /api/invoices")])
+
+    kept = _without_collisions([play("r1")], [play("g1"), play("g2")])
+
+    assert [p.id for p in kept] == ["g1", "g2"]

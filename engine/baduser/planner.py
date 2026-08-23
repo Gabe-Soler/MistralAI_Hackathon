@@ -73,10 +73,13 @@ async def plan(
         return []
 
     # Only personas no authored play will touch, so the disjointness assertion holds.
+    # Deliberately NOT trying to predict which personas hero_chains will take. That guess
+    # was wrong (it draws from tenant B) and cost a mid-run crash after seeding had already
+    # written to the target. campaign._without_collisions drops any play that collides, so
+    # offering the full pool costs at most a discarded play instead of the whole run.
     pool = [p for p in manifest.personas if not p.control]
-    if len(pool) < 3:
+    if not pool:
         return []
-    pool = pool[2:]  # hero_chains takes from the front
 
     allowed = {c.value for c in channels} & {"api", "chat"}
     if not allowed:
