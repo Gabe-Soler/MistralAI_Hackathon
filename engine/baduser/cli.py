@@ -31,6 +31,8 @@ from .models import (
     PhaseEvent,
     ProductType,
     SessionConfig,
+    StepFinished,
+    StepStarted,
     TruthUpdated,
     Verdict,
 )
@@ -213,6 +215,30 @@ async def pipeline(state: EngineState) -> None:
     # ---- 4-5. attack + check --------------------------------------------------
     state.phase = "attacking"
     bus.emit(PhaseEvent(phase="attacking"))
+    # UI flows before the attack: they answer "can a person use this at all", which is a
+    # different question from "does anything leak" and the one a human notices first. An
+    # app can pass every leak check while being completely unusable.
+    if Channel.web in cfg.channels and adapters.get(Channel.web) is not None:
+        from .uiflows import run_flows
+
+        def _ui_emit(flow: object, state: str, reason: str) -> None:
+            if state == "started":
+                bus.emit(StepStarted(play_id="ui-flows", persona_id="ui",
+                                     channel=Channel.web, action=flow.title))
+                return
+            bus.emit(StepFinished(
+                play_id="ui-flows", persona_id="ui", channel=Channel.web,
+                action=flow.title, detail=reason,
+                verdict=Verdict.benign if state == "passed" else Verdict.broken,
+                invariant_id=flow.id))
+
+        typer.echo("  checking the UI flows...")
+        ui = await run_flows(adapters[Channel.web], manifest, cfg.target, emit=_ui_emit)
+        state.findings.extend(ui)
+        for f in ui:
+            typer.secho(f"  BROKEN: {f.action} -- {f.rationale}", fg="yellow")
+        typer.secho(f"  UI flows: {5 - len(ui)}/5 passed", fg="green" if not ui else "yellow")
+
     ctx = build_ctx(gt, manifest, bus, adapters, min_interval=1.0 / max(cfg.rps, 0.1))
 
     # With an LLM the run widens beyond the canary scan: generated plays probe the other
@@ -254,6 +280,9 @@ async def pipeline(state: EngineState) -> None:
     breaches = sum(1 for f in state.findings if f.verdict == Verdict.breach)
     typer.secho(f"  {breaches} BREACH" + ("" if breaches == 1 else "ES"),
                 fg="red" if breaches else "green")
+    broken = sum(1 for f in state.findings if f.verdict == Verdict.broken)
+    if broken:
+        typer.secho(f"  {broken} BROKEN UI FLOW" + ("" if broken == 1 else "S"), fg="yellow")
     suspected = sum(1 for f in state.findings if f.verdict == Verdict.suspected)
     if suspected:
         # Deliberately a separate line and a different colour: these are judged, not

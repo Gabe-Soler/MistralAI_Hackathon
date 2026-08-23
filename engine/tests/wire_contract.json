@@ -475,7 +475,8 @@
         "benign",
         "breach",
         "error",
-        "suspected"
+        "suspected",
+        "broken"
       ],
       "title": "Verdict",
       "type": "string"

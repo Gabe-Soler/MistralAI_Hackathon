@@ -21,12 +21,15 @@ import type { RunView } from "./reducer";
  * nobody measured. Errors surface in the transcript and the run-health line instead.
  */
 export const isReportable = (f: Finding): boolean =>
-  f.verdict === "breach" || f.verdict === "suspected";
+  f.verdict === "breach" || f.verdict === "suspected" || f.verdict === "broken";
 
 function severityOf(f: Finding, compoundPlays: Set<string>): QaSeverity {
   // Judged, not proven. Its own tier, below every proven one, however confident the
   // model sounded -- `breach` means we planted the data and found it where it could not
   // legally be, and nothing inferred earns that rung.
+  // A flow nobody could complete. Distinct from every security tier: the question it
+  // answers is "can a person use this", not "did anything leak".
+  if (f.verdict === "broken") return "broken";
   if (f.verdict === "suspected") return "suspected";
   if (compoundPlays.has(f.play_id)) return "critical";
   return f.invariant_id ? "major" : "minor";
@@ -53,7 +56,12 @@ export function toIssues(view: RunView): QaIssue[] {
     return {
       id: f.id,
       severity: severityOf(f, compound),
-      summary: rule ? `${rule.name} — ${f.action}` : f.action,
+      summary:
+        f.verdict === "broken"
+          ? `Users cannot complete this: ${f.action}`
+          : rule
+            ? `${rule.name} — ${f.action}`
+            : f.action,
       source: `${f.channel} · ${who}${f.cite ? ` · ${f.cite}` : ""}`,
       // What the copy button yields, so it must stand alone: the rule that was broken,
       // then the response that broke it.
@@ -156,7 +164,9 @@ export function runHealth(view: RunView): { ok: boolean; text: string } {
   );
   const tenants = new Set(view.seeds.map((s) => s.tenant_id)).size;
   const suspected = view.findings.filter((f) => f.verdict === "suspected").length;
+  const broken = view.findings.filter((f) => f.verdict === "broken").length;
   const parts = [`${steps} step${steps === 1 ? "" : "s"}`];
+  if (broken) parts.push(`${broken} broken flow${broken === 1 ? "" : "s"}`);
   if (suspected) parts.push(`${suspected} suspected`);
   if (errored) parts.push(`${errored} errored`);
   if (tenants) parts.push(`${tenants} tenants seeded`);

@@ -31,8 +31,12 @@ export type Channel = "api" | "chat" | "web" | "voice";
  * scan is blind to. It is NOT the same claim as `breach`: one is a lookup against data the
  * tool planted, the other is inference and can be wrong. Render it as a weaker claim and
  * never fold it into the breach count.
+ *
+ * `broken` is a UI flow that did not complete -- signup that never submitted, a list that
+ * never rendered. Nothing leaked; a person simply could not use the app. Proven by trying,
+ * so it is not `suspected`, but it says nothing about data exposure, so it is not `breach`.
  */
-export type Verdict = "benign" | "breach" | "error" | "suspected";
+export type Verdict = "benign" | "breach" | "error" | "suspected" | "broken";
 
 /** A rule the app is supposed to enforce. `cite` is `file:line` in the target's source. */
 export interface Invariant {

@@ -36,6 +36,10 @@ class Verdict(str, Enum):
     # be counted, coloured or CI-gated as if it were the same thing (PLAN 15: a
     # hallucinated invariant produces a FALSE BREACH against correct code).
     suspected = "suspected"
+    # A UI flow that did not complete. Not a data leak and not an adapter crash: the app
+    # rendered, and a user still could not get through it. Proven by trying, so it is not
+    # `suspected` -- but it says nothing about data exposure, so it is not `breach` either.
+    broken = "broken"
 
 
 # ---------- Ground truth (the rules) ----------

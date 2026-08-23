@@ -1,6 +1,6 @@
 import { HERO_PALETTE } from '@/hooks/useScrollPalette'
 
-export type QaSeverity = 'critical' | 'major' | 'minor' | 'suspected'
+export type QaSeverity = 'critical' | 'major' | 'minor' | 'suspected' | 'broken'
 
 export interface QaIssue {
   id: string
@@ -15,6 +15,8 @@ export interface QaIssue {
 
 /** Severity swatches, taken from the brand ramp the staircase animates through. */
 export const SEVERITY_COLOR: Record<QaSeverity, string> = {
+  // A usability failure, not a security one. Its own colour so it never reads as a leak.
+  broken: HERO_PALETTE[3],
   // Muted, and off the hero ramp on purpose: a judged finding is a weaker claim than a
   // proven one, and colouring it like a breach would erase the distinction the engine
   // works hard to keep.
