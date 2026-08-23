@@ -67,7 +67,18 @@ export function QaIssueCard({ issue, index, count, mode = 'scroll' }: QaIssueCar
       </pre>
 
       <div className="mt-8 flex items-center gap-4">
-        <button
+        {issue.shotUrl && (
+        // A picture of the page a user could not get through IS the evidence for a
+        // usability failure, the way a leaked canary is for a breach.
+        <img
+          src={issue.shotUrl}
+          alt=""
+          loading="lazy"
+          className="mt-6 block w-full border border-[var(--border)]"
+        />
+      )}
+
+      <button
           type="button"
           onClick={copy}
           className="flex items-center gap-2 border border-[var(--border)] px-3.5 py-2 font-mono text-[0.7rem] tracking-[0.12em] uppercase transition-colors hover:border-[var(--hero-ink)] hover:bg-[var(--muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"

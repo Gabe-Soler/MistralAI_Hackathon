@@ -221,7 +221,8 @@ async def pipeline(state: EngineState) -> None:
     if Channel.web in cfg.channels and adapters.get(Channel.web) is not None:
         from .uiflows import run_flows
 
-        def _ui_emit(flow: object, state: str, reason: str) -> None:
+        def _ui_emit(flow: object, state: str, reason: str,
+                     shot: str | None = None) -> None:
             if state == "started":
                 bus.emit(StepStarted(play_id="ui-flows", persona_id="ui",
                                      channel=Channel.web, action=flow.title))
@@ -230,7 +231,7 @@ async def pipeline(state: EngineState) -> None:
                 play_id="ui-flows", persona_id="ui", channel=Channel.web,
                 action=flow.title, detail=reason,
                 verdict=Verdict.benign if state == "passed" else Verdict.broken,
-                invariant_id=flow.id))
+                invariant_id=flow.id, shot=shot))
 
         typer.echo("  checking the UI flows...")
         ui = await run_flows(adapters[Channel.web], manifest, cfg.target, emit=_ui_emit)

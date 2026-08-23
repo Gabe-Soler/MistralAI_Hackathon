@@ -119,6 +119,38 @@ async def test_one_broken_flow_does_not_end_the_suite() -> None:
     assert len(web.tasks) == 3  # every flow was attempted
 
 
+async def test_a_hung_flow_is_bounded_and_reported() -> None:
+    """campaign.TIMEOUTS only bounds steps run through run_step, and these call the adapter
+    directly -- so without this the suite had no ceiling and a wedged browser hung the run
+    forever, which is worse than any timeout value."""
+    import asyncio
+
+    class Hangs:
+        async def act(self, step):
+            await asyncio.sleep(60)
+
+    flows = (Flow("ui-create", "Create a record", "make one"),)
+
+    (f,) = await run_flows(Hangs(), _manifest(), "http://x", flows=flows, timeout=0.05)
+
+    assert f.verdict is Verdict.broken
+    assert "did not finish" in f.rationale
+
+
+async def test_a_broken_flow_carries_its_frame() -> None:
+    """A screenshot of the page it broke on IS the evidence for a usability failure."""
+    class WithShot:
+        async def act(self, step):
+            return Result(status=200, raw="RESULT: FAIL nothing happened",
+                          screenshot="/abs/path/.baduser/runs/r1/shots/ui-create.png")
+
+    flows = (Flow("ui-create", "Create a record", "make one"),)
+
+    (f,) = await run_flows(WithShot(), _manifest(), "http://x", flows=flows)
+
+    assert f.shot == "ui-create.png"  # basename: a server path is useless to a browser
+
+
 async def test_the_signed_out_flow_runs_without_an_account() -> None:
     flows = (Flow("ui-auth-gate", "Gate", "stay out", needs_persona=False),)
 

@@ -20,8 +20,10 @@ agent that wanders off and never answers is exactly the case where a UI is unusa
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
+from pathlib import PurePath
 from typing import Any
 from uuid import uuid4
 
@@ -29,6 +31,12 @@ from .models import Channel, Finding, Manifest, Step, Verdict
 from .prompts import SAFETY
 
 _RESULT = re.compile(r"RESULT:\s*(PASS|FAIL)\b[ \t]*(.*)", re.IGNORECASE)
+
+# Ceiling per flow. The agent already caps itself at WebAdapter.max_steps (12) browser
+# actions, and each is an LLM call plus a page interaction, so a healthy flow lands well
+# inside this. The timeout is for the unhealthy case: a login loop or a modal it cannot
+# dismiss, where the agent burns its whole budget going nowhere.
+FLOW_TIMEOUT = 180.0
 
 _CONTRACT = """
 End your report with exactly one line:
@@ -107,6 +115,7 @@ async def run_flows(
     emit: Any = None,
     redact: Any = None,
     flows: tuple[Flow, ...] = FLOWS,
+    timeout: float = FLOW_TIMEOUT,  # noqa: ASYNC109 - wait_for is the impl; same shape as EngineState.ask
 ) -> list[Finding]:
     """Run each flow once. Returns a Finding per BROKEN flow; passes produce nothing."""
     redact = redact or (lambda t: t)
@@ -126,7 +135,11 @@ async def run_flows(
             emit(flow, "started", "")
 
         try:
-            result = await adapter.act(step)
+            result = await asyncio.wait_for(adapter.act(step), timeout=timeout)
+        except TimeoutError:
+            result = None
+            ok, reason = False, (f"the flow did not finish within {timeout:.0f}s -- the "
+                                 "agent could not get through it")
         except Exception as e:  # noqa: BLE001 - one broken flow must not end the suite
             result = None
             reason, ok = f"the browser could not run this flow: {e!r}"[:200], False
@@ -136,8 +149,9 @@ async def run_flows(
             else:
                 ok, reason = read_result(result.raw)
 
+        shot = _shot_name(result)
         if emit is not None:
-            emit(flow, "passed" if ok else "broken", reason)
+            emit(flow, "passed" if ok else "broken", reason, shot)
         if ok:
             continue
 
@@ -151,5 +165,13 @@ async def run_flows(
             invariant_id=flow.id,
             evidence=redact((result.raw if result else "")[:400]),
             rationale=reason,
+            shot=shot,
         ))
     return out
+
+
+def _shot_name(result: Any) -> str | None:
+    """Basename only -- the route resolves it inside the run's shots dir, and a server
+    filesystem path is useless to a browser."""
+    path = getattr(result, "screenshot", None)
+    return PurePath(path).name if path else None

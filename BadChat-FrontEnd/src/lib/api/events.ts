@@ -69,6 +69,8 @@ export interface Finding {
   evidence: string;
   /** Why the judge thinks a rule was broken. Empty on canary breaches. */
   rationale: string;
+  /** Basename of a browser frame; fetch from /api/{run_id}/shots/{shot}. */
+  shot: string | null;
   /** Declared by the engine but never populated -- always `[]`. Do not build UI for it. */
   repro: Step[];
 }

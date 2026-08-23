@@ -1,3 +1,4 @@
+import { shotUrl } from "@/lib/api/client";
 import type { Finding } from "@/lib/api/events";
 import type { QaIssue, QaSeverity } from "@/lib/qaIssues";
 import type { ThinkingStep } from "@/lib/thinkingSteps";
@@ -74,6 +75,7 @@ export function toIssues(view: RunView): QaIssue[] {
       ]
         .filter((l) => l !== null)
         .join("\n"),
+      shotUrl: f.shot ? shotUrl(view.runId, f.shot) : undefined,
     };
   });
 }

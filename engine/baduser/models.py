@@ -232,6 +232,9 @@ class Finding(BaseModel):
     # Why the judge thinks the rule was broken. Empty for canary breaches, where the
     # evidence speaks for itself.
     rationale: str = ""
+    # Basename of a browser frame, served from /api/{run_id}/shots/{shot}. A broken UI
+    # flow is the one finding where a picture IS the evidence.
+    shot: str | None = None
     repro: list[Step] = []
 
 

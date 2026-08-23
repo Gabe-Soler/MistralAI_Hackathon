@@ -11,6 +11,8 @@ export interface QaIssue {
   source: string
   /** The raw error, and what the copy button puts on the clipboard. */
   error: string
+  /** A browser frame of the failure. Only broken UI flows have one. */
+  shotUrl?: string
 }
 
 /** Severity swatches, taken from the brand ramp the staircase animates through. */

@@ -125,6 +125,18 @@
           "title": "Repro",
           "type": "array"
         },
+        "shot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shot"
+        },
         "verdict": {
           "$ref": "#/$defs/Verdict"
         }
